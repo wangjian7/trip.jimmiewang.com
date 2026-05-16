@@ -9,8 +9,8 @@ export default function Home() {
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Trip Board
           </h1>
-          <p className="vv-muted max-w-2xl text-base leading-7">
-            用一个统一的页面，和同伴一起维护行程。当前版本为纯静态站点：编辑内容会保存在浏览器本地，可导出/导入 JSON 进行同步。
+          <p className="vv-link max-w-2xl text-base leading-7">
+            和同伴一起维护行程
           </p>
         </header>
 
@@ -40,9 +40,6 @@ export default function Home() {
           ))}
         </main>
 
-        <footer className="vv-muted text-xs leading-6">
-          想做到“大家实时共同编辑并自动同步”，需要引入 Cloudflare 的持久化能力（例如 D1/KV + Worker）。后续随时可以升级。
-        </footer>
       </div>
     </div>
   );

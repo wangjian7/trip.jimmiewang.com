@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   TripDay,
   TripFlight,
@@ -52,8 +52,8 @@ function normalizeTripPlan(plan: TripPlan): TripPlan {
         flights: shouldMigrateFlight
           ? [
               {
-                id: newId("f"),
-                flightNo: d.flight,
+                id: `f-migrated-${d.id}`,
+                flightNo: d.flight ?? "",
                 departAt: "",
                 arriveAt: "",
                 price: "",
@@ -64,8 +64,8 @@ function normalizeTripPlan(plan: TripPlan): TripPlan {
         hotels: shouldMigrateHotel
           ? [
               {
-                id: newId("h"),
-                name: d.stay,
+                id: `h-migrated-${d.id}`,
+                name: d.stay ?? "",
                 url: "",
                 address: "",
                 price: "",
@@ -75,18 +75,6 @@ function normalizeTripPlan(plan: TripPlan): TripPlan {
       };
     }),
   };
-}
-
-function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 async function sha256Hex(text: string) {
@@ -161,7 +149,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
   const key = useMemo(() => storageKey(trip.slug), [trip.slug]);
   const wkey = useMemo(() => writeKeyStorageKey(trip.slug), [trip.slug]);
   const defaultTrip = useMemo(() => trip, [trip]);
-  function readStoredPlan(): TripPlan | null {
+  const readStoredPlan = useCallback((): TripPlan | null => {
     if (typeof window === "undefined") return null;
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -172,16 +160,10 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     } catch {
       return null;
     }
-  }
+  }, [key, trip.slug]);
 
-  const [plan, setPlan] = useState<TripPlan>(() =>
-    normalizeTripPlan(readStoredPlan() ?? trip),
-  );
-  const [activeDayId, setActiveDayId] = useState(() => {
-    const normalized = normalizeTripPlan(readStoredPlan() ?? trip);
-    return normalized.days[0]?.id ?? "";
-  });
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [plan, setPlan] = useState<TripPlan>(() => normalizeTripPlan(trip));
+  const [activeDayId, setActiveDayId] = useState(trip.days[0]?.id ?? "");
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -221,31 +203,53 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     };
   }, [overviewOpen]);
 
-  function persistPlan(nextPlan: TripPlan) {
+  const persistPlan = useCallback(
+    (nextPlan: TripPlan) => {
     if (typeof window === "undefined") return;
     try {
       localStorage.setItem(key, JSON.stringify(nextPlan));
       setStorageError(null);
     } catch {
       setStorageError(
-        "本地存储空间可能不足（照片会占用较多空间）。建议减少照片数量，或先导出 JSON 做备份。",
+          "本地存储空间可能不足（照片会占用较多空间）。建议减少照片数量，或先用“云端保存”做备份。",
       );
     }
-  }
+    },
+    [key],
+  );
 
-  function setPlanAndPersist(
-    updater: TripPlan | ((prev: TripPlan) => TripPlan),
-  ) {
-    setPlan((prev) => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      if (typeof queueMicrotask === "function") {
-        queueMicrotask(() => persistPlan(next));
-      } else {
-        Promise.resolve().then(() => persistPlan(next));
-      }
-      return next;
-    });
-  }
+  const setPlanAndPersist = useCallback(
+    (updater: TripPlan | ((prev: TripPlan) => TripPlan)) => {
+      setPlan((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        if (typeof queueMicrotask === "function") {
+          queueMicrotask(() => persistPlan(next));
+        } else {
+          Promise.resolve().then(() => persistPlan(next));
+        }
+        return next;
+      });
+    },
+    [persistPlan],
+  );
+
+  useEffect(() => {
+    const stored = readStoredPlan();
+    if (!stored) return;
+    const normalized = normalizeTripPlan(stored);
+    const nextDayId = normalized.days[0]?.id ?? "";
+    if (typeof queueMicrotask === "function") {
+      queueMicrotask(() => {
+        setPlanAndPersist(normalized);
+        setActiveDayId(nextDayId);
+      });
+    } else {
+      Promise.resolve().then(() => {
+        setPlanAndPersist(normalized);
+        setActiveDayId(nextDayId);
+      });
+    }
+  }, [readStoredPlan, setPlanAndPersist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -279,7 +283,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     return () => {
       cancelled = true;
     };
-  }, [trip.slug, trip.days]);
+  }, [trip.slug, trip.days, setPlanAndPersist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -580,18 +584,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     }));
   }
 
-  async function copyJsonToClipboard() {
-    const text = JSON.stringify(plan, null, 2);
-    if (!navigator?.clipboard?.writeText) return;
-    await navigator.clipboard.writeText(text);
-  }
-
-  async function copyWriteKeyToClipboard() {
-    if (!writeKeyValue) return;
-    if (!navigator?.clipboard?.writeText) return;
-    await navigator.clipboard.writeText(writeKeyValue);
-  }
-
   function openWriteKeyModal(mode: "unlock" | "set" | "rotate") {
     setWriteKeyModalMode(mode);
     setWriteKeyError(null);
@@ -701,20 +693,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     setWriteKeyValue(null);
   }
 
-  function triggerImport() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleImportFile(file: File | null) {
-    if (!file) return;
-    const raw = await file.text();
-    const parsed = JSON.parse(raw) as TripPlan;
-    if (!parsed?.slug || parsed.slug !== trip.slug) return;
-    const normalized = normalizeTripPlan(parsed);
-    setPlanAndPersist(normalized);
-    setActiveDayId(normalized.days[0]?.id ?? "");
-  }
-
   return (
     <div className="flex-1 bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10">
@@ -777,33 +755,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 一页展示
               </button>
 
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() =>
-                  downloadJson(`${plan.slug}.json`, {
-                    exportedAt: new Date().toISOString(),
-                    plan,
-                  })
-                }
-                type="button"
-              >
-                导出 JSON
-              </button>
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={triggerImport}
-                type="button"
-              >
-                导入 JSON
-              </button>
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={copyJsonToClipboard}
-                type="button"
-              >
-                复制到剪贴板
-              </button>
-
               {!plan.writeKeyHash ? (
                 <button
                   className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
@@ -818,18 +769,10 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   onClick={() => openWriteKeyModal("unlock")}
                   type="button"
                 >
-                  输入口令
+                  编辑
                 </button>
               ) : (
                 <>
-                  <button
-                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={copyWriteKeyToClipboard}
-                    type="button"
-                    disabled={!writeKeyValue}
-                  >
-                    复制口令
-                  </button>
                   <button
                     className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
                     onClick={() => openWriteKeyModal("rotate")}
@@ -847,15 +790,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               >
                 恢复默认
               </button>
-              <input
-                ref={fileInputRef}
-                className="hidden"
-                type="file"
-                accept="application/json"
-                aria-label="导入 JSON 文件"
-                title="导入 JSON 文件"
-                onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
-              />
             </div>
           </div>
 
@@ -877,7 +811,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           ) : null}
 
           <p className="vv-muted text-sm">
-            输入口令后即可修改内容；未输入口令时为只读。也可用“云端保存/拉取”同步，或用“导出/导入 JSON”分享备份。
+            输入口令后即可修改内容；未输入口令时为只读。也可用“云端保存/拉取”进行同步。
           </p>
         </header>
 
@@ -913,6 +847,21 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
             </div>
           </div>
 
+          {activeDay ? (
+            <div className="vv-divider relative border-b px-6 pb-5 pt-6 md:hidden">
+              <div className="vv-kicker text-xs font-medium tracking-wider">
+                CITY
+              </div>
+              <input
+                value={activeDay.city}
+                onChange={(e) => updateDay(activeDay.id, { city: e.target.value })}
+                className="mt-3 w-full bg-transparent text-xl font-semibold outline-none"
+                aria-label="City"
+                readOnly={readOnly}
+              />
+            </div>
+          ) : null}
+
           <div className="relative grid grid-cols-1 md:grid-cols-[380px_1fr]">
             <div className="pointer-events-none absolute inset-y-0 left-[380px] hidden md:block">
               <div className="vv-timeline-line absolute inset-y-0 left-0 w-px" />
@@ -928,9 +877,9 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
             <aside className="vv-divider relative order-2 flex flex-col border-t md:order-none md:border-t-0">
               {activeDay ? (
                 <div className="flex flex-1 flex-col gap-6 px-6 pb-8 pt-6">
-                  <div className="flex flex-col gap-3">
+                  <div className="hidden flex-col gap-3 md:flex">
                     <div className="vv-kicker text-xs font-medium tracking-wider">
-                      TODAY
+                      CITY
                     </div>
                     <input
                       value={activeDay.city}
@@ -996,6 +945,8 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                               />
                               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                 <input
+                                  type="time"
+                                  step={60}
                                   value={f.departAt ?? ""}
                                   onChange={(e) =>
                                     updateFlight(activeDay.id, f.id, {
@@ -1008,6 +959,8 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                                   readOnly={readOnly}
                                 />
                                 <input
+                                  type="time"
+                                  step={60}
                                   value={f.arriveAt ?? ""}
                                   onChange={(e) =>
                                     updateFlight(activeDay.id, f.id, {
@@ -1208,7 +1161,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                     {(activeDay.photos ?? []).length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        这里可以放酒店/航班信息截图、以及游玩照片。上传后会保存在本地，并会跟随导出 JSON 一起分享。
+                        这里可以放酒店/航班信息截图、以及游玩照片。上传后会保存在本地浏览器。
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -1689,7 +1642,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       </div>
 
                       <div className="vv-muted text-xs leading-6">
-                        上传的照片会压缩后保存到本地，并会跟随导出 JSON 一起分享；照片越多导出的 JSON 也会越大。
+                        上传的照片会压缩后保存到本地；照片越多占用的本地存储也会越大。
                       </div>
                     </div>
                   </div>

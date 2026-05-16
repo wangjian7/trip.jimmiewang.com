@@ -57,7 +57,7 @@ export const trips: TripPlan[] = [
   {
     slug: "au-2026-09-30",
     title: "澳洲海岸线：黄金海岸 → 凯恩斯 → 悉尼",
-    subtitle: "9/30–10/9（可按实际航班调整）",
+    subtitle: "2026 9/30–10/9（可按实际航班调整）",
     days: [
       {
         id: "d-0930",
