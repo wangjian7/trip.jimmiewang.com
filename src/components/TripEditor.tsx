@@ -148,7 +148,6 @@ async function compressImageToJpegDataUrl(file: File) {
 export function TripEditor({ trip }: { trip: TripPlan }) {
   const key = useMemo(() => storageKey(trip.slug), [trip.slug]);
   const wkey = useMemo(() => writeKeyStorageKey(trip.slug), [trip.slug]);
-  const defaultTrip = useMemo(() => trip, [trip]);
   const readStoredPlan = useCallback((): TripPlan | null => {
     if (typeof window === "undefined") return null;
     const raw = localStorage.getItem(key);
@@ -684,13 +683,9 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     }
   }
 
-  function resetToDefault() {
-    localStorage.removeItem(key);
-    localStorage.removeItem(wkey);
-    setPlanAndPersist(defaultTrip);
-    setActiveDayId(defaultTrip.days[0]?.id ?? "");
-    setIsUnlocked(true);
-    setWriteKeyValue(null);
+  function lockToReadOnly() {
+    setIsUnlocked(false);
+    setCloudInfo("已切换为只读");
   }
 
   return (
@@ -780,16 +775,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   >
                     更换口令
                   </button>
+                  <button
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                    onClick={lockToReadOnly}
+                    type="button"
+                  >
+                    回到只读模式
+                  </button>
                 </>
               )}
-
-              <button
-                className="vv-btn-primary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={resetToDefault}
-                type="button"
-              >
-                恢复默认
-              </button>
             </div>
           </div>
 
