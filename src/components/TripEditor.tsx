@@ -654,17 +654,43 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           ) : null}
 
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            这是纯静态站点：编辑内容会保存到浏览器本地。要和朋友同步，用“导出/导入”或“复制到剪贴板”分享同一份 JSON。
+            输入口令后即可修改内容；未输入口令时为只读。也可用“云端保存/拉取”同步，或用“导出/导入 JSON”分享备份。
           </p>
         </header>
 
         <div className="relative overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(0,0,0,0.04),transparent_55%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(255,255,255,0.06),transparent_55%)]" />
 
-          <div className="relative grid grid-cols-1 lg:grid-cols-[380px_1fr]">
-            <div className="hidden lg:block">
-              <div className="pointer-events-none absolute inset-y-0 left-[380px] w-px bg-zinc-200 dark:bg-zinc-800" />
-              <div className="pointer-events-none absolute inset-y-0 left-[380px] w-10 -translate-x-1/2">
+          <div className="relative border-b border-zinc-200 px-6 pb-5 pt-6 dark:border-zinc-800">
+            <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+              DAYS
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {plan.days.map((d) => {
+                const active = d.id === activeDayId;
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setActiveDayId(d.id)}
+                    className={[
+                      "rounded-full px-3 py-1.5 text-sm transition",
+                      active
+                        ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-950"
+                        : "bg-zinc-100 text-zinc-800 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
+                    ].join(" ")}
+                  >
+                    {d.dateLabel}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="relative grid grid-cols-1 md:grid-cols-[380px_1fr]">
+            <div className="pointer-events-none absolute inset-y-0 left-[380px] hidden md:block">
+              <div className="absolute inset-y-0 left-0 w-px bg-zinc-200 dark:bg-zinc-800" />
+              <div className="absolute inset-y-0 left-0 w-10 -translate-x-1/2">
                 <div className="absolute left-1/2 top-10 h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
                 <div className="absolute left-1/2 top-24 h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
                 <div className="absolute left-1/2 top-[9.5rem] h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
@@ -673,33 +699,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               </div>
             </div>
 
-            <aside className="relative flex flex-col border-b border-zinc-200 dark:border-zinc-800 lg:border-b-0">
-              <div className="flex flex-col gap-3 px-6 pt-6">
-                <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
-                  DAYS
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {plan.days.map((d) => {
-                    const active = d.id === activeDayId;
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => setActiveDayId(d.id)}
-                        className={[
-                          "rounded-full px-3 py-1.5 text-sm transition",
-                          active
-                            ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-950"
-                            : "bg-zinc-100 text-zinc-800 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
-                        ].join(" ")}
-                      >
-                        {d.dateLabel}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
+            <aside className="relative order-2 flex flex-col border-t border-zinc-200 dark:border-zinc-800 md:order-none md:border-t-0">
               {activeDay ? (
                 <div className="flex flex-1 flex-col gap-6 px-6 pb-8 pt-6">
                   <div className="flex flex-col gap-3">
@@ -824,7 +824,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               ) : null}
             </aside>
 
-            <section className="relative flex flex-col px-6 pb-8 pt-6">
+            <section className="relative order-1 flex flex-col border-b border-zinc-200 px-6 pb-8 pt-6 dark:border-zinc-800 md:order-none md:border-b-0">
               <div className="flex flex-col gap-2">
                 <div className="flex items-end justify-between">
                   <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -914,7 +914,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
         </div>
 
         <footer className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
-          建议约定一份“最终 JSON”，每次更新后导出并发群里，其他人导入即可保持一致。
+          Powered by{" "}
+          <a
+            className="font-medium text-zinc-900 hover:underline dark:text-zinc-50"
+            href="https://jimmiewang.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            jimmiewang.com
+          </a>
         </footer>
 
         {writeKeyModalOpen ? (

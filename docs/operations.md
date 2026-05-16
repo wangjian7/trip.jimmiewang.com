@@ -90,9 +90,11 @@
     - Framework preset: 可选 `Next.js (Static HTML Export)`（如有）
   - Functions 配置:
     - Pages 会自动识别仓库中的 `/functions` 目录并部署 Functions。
-    - 在 Pages 项目的 Settings → Functions → Bindings 中添加 D1 binding：
+    - 在 Pages 项目的 Settings → Functions → Bindings 中添加 D1 binding（Production）：
+      - 选择 Environment: `Production`（若界面提供 Preview/Production 切换）
       - Variable name: `DB`
       - D1 database: `trip-jimmiewang-com`
+    - 若同时需要预览环境联调，建议也配置 Preview 环境的同名 `DB` 绑定（指向同一个或独立的 D1）。
   - 域名绑定（可选）:
     - 在 Pages 项目中添加自定义域名 `trip.jimmiewang.com`，并按提示完成 DNS 记录配置。
 - 验证方式:
