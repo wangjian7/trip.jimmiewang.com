@@ -1,0 +1,8 @@
+name = "trip-jimmiewang-com"
+compatibility_date = "2026-05-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trip-jimmiewang-com"
+database_id = "4d74b296-dff6-44cd-90c7-17dcb02ef6d4"
+
