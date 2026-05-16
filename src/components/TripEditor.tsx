@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   TripDay,
+  TripFlight,
+  TripHotel,
   TripPhoto,
   TripPhotoTag,
   TripPlan,
@@ -24,6 +26,55 @@ function newId(prefix: string) {
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `${prefix}-${id}`;
+}
+
+function toHttpUrl(raw: string) {
+  const u = raw.trim();
+  if (!u) return "";
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+  return `https://${u}`;
+}
+
+function normalizeTripPlan(plan: TripPlan): TripPlan {
+  return {
+    ...plan,
+    days: plan.days.map((d) => {
+      const flights: TripFlight[] = Array.isArray(d.flights) ? d.flights : [];
+      const hotels: TripHotel[] = Array.isArray(d.hotels) ? d.hotels : [];
+
+      const shouldMigrateFlight = flights.length === 0 && Boolean(d.flight?.trim());
+      const shouldMigrateHotel = hotels.length === 0 && Boolean(d.stay?.trim());
+
+      return {
+        ...d,
+        flight: shouldMigrateFlight ? undefined : d.flight,
+        stay: shouldMigrateHotel ? undefined : d.stay,
+        flights: shouldMigrateFlight
+          ? [
+              {
+                id: newId("f"),
+                flightNo: d.flight,
+                departAt: "",
+                arriveAt: "",
+                price: "",
+                hasLayover: false,
+              },
+            ]
+          : flights,
+        hotels: shouldMigrateHotel
+          ? [
+              {
+                id: newId("h"),
+                name: d.stay,
+                url: "",
+                address: "",
+                price: "",
+              },
+            ]
+          : hotels,
+      };
+    }),
+  };
 }
 
 function downloadJson(filename: string, data: unknown) {
@@ -110,8 +161,26 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
   const key = useMemo(() => storageKey(trip.slug), [trip.slug]);
   const wkey = useMemo(() => writeKeyStorageKey(trip.slug), [trip.slug]);
   const defaultTrip = useMemo(() => trip, [trip]);
-  const [plan, setPlan] = useState<TripPlan>(trip);
-  const [activeDayId, setActiveDayId] = useState(trip.days[0]?.id ?? "");
+  function readStoredPlan(): TripPlan | null {
+    if (typeof window === "undefined") return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as TripPlan;
+      if (!parsed?.slug || parsed.slug !== trip.slug) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  const [plan, setPlan] = useState<TripPlan>(() =>
+    normalizeTripPlan(readStoredPlan() ?? trip),
+  );
+  const [activeDayId, setActiveDayId] = useState(() => {
+    const normalized = normalizeTripPlan(readStoredPlan() ?? trip);
+    return normalized.days[0]?.id ?? "";
+  });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -132,6 +201,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     dayId: string;
     photoId: string;
   } | null>(null);
+  const [overviewOpen, setOverviewOpen] = useState(false);
 
   const readOnly = Boolean(plan.writeKeyHash) && !isUnlocked;
 
@@ -139,17 +209,43 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     () => plan.days.find((d) => d.id === activeDayId) ?? plan.days[0],
     [activeDayId, plan.days],
   );
+  const isSydneyTheme = useMemo(() => {
+    const city = (activeDay?.city ?? "").toLowerCase();
+    return city.includes("悉尼") || city.includes("sydney");
+  }, [activeDay?.city]);
 
   useEffect(() => {
-    const raw = localStorage.getItem(key);
-    if (!raw) return;
+    document.body.classList.toggle("print-mode", overviewOpen);
+    return () => {
+      document.body.classList.remove("print-mode");
+    };
+  }, [overviewOpen]);
+
+  function persistPlan(nextPlan: TripPlan) {
+    if (typeof window === "undefined") return;
     try {
-      const parsed = JSON.parse(raw) as TripPlan;
-      if (!parsed?.slug || parsed.slug !== trip.slug) return;
-      setPlan(parsed);
-      setActiveDayId(parsed.days[0]?.id ?? "");
-    } catch {}
-  }, [key, trip.slug]);
+      localStorage.setItem(key, JSON.stringify(nextPlan));
+      setStorageError(null);
+    } catch {
+      setStorageError(
+        "本地存储空间可能不足（照片会占用较多空间）。建议减少照片数量，或先导出 JSON 做备份。",
+      );
+    }
+  }
+
+  function setPlanAndPersist(
+    updater: TripPlan | ((prev: TripPlan) => TripPlan),
+  ) {
+    setPlan((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (typeof queueMicrotask === "function") {
+        queueMicrotask(() => persistPlan(next));
+      } else {
+        Promise.resolve().then(() => persistPlan(next));
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -164,9 +260,10 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           setCloudInfo("云端暂无数据");
           return;
         }
-        setPlan(data.plan as TripPlan);
+        const normalized = normalizeTripPlan(data.plan as TripPlan);
+        setPlanAndPersist(normalized);
         setActiveDayId(
-          (data.plan as TripPlan).days?.[0]?.id ?? (trip.days[0]?.id ?? ""),
+          normalized.days?.[0]?.id ?? (trip.days[0]?.id ?? ""),
         );
         setCloudUpdatedAt(data.updatedAt ?? null);
         setCloudInfo("已从云端拉取");
@@ -183,17 +280,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
       cancelled = true;
     };
   }, [trip.slug, trip.days]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(plan));
-      setStorageError(null);
-    } catch {
-      setStorageError(
-        "本地存储空间可能不足（照片会占用较多空间）。建议减少照片数量，或先导出 JSON 做备份。",
-      );
-    }
-  }, [key, plan]);
 
   useEffect(() => {
     let cancelled = false;
@@ -240,20 +326,147 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   function updatePlan(patch: Partial<TripPlan>) {
     if (readOnly) return;
-    setPlan((prev) => ({ ...prev, ...patch }));
+    setPlanAndPersist((prev) => ({ ...prev, ...patch }));
   }
 
   function updateDay(dayId: string, patch: Partial<TripDay>) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)),
     }));
   }
 
+  function addFlight(dayId: string) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              flight: undefined,
+              flights: [
+                ...(d.flights ?? []),
+                {
+                  id: newId("f"),
+                  flightNo: "",
+                  departAt: "",
+                  arriveAt: "",
+                  price: "",
+                  hasLayover: false,
+                },
+              ],
+            },
+      ),
+    }));
+  }
+
+  function updateFlight(
+    dayId: string,
+    flightId: string,
+    patch: Partial<TripFlight>,
+  ) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              flight: undefined,
+              flights: (d.flights ?? []).map((f) =>
+                f.id === flightId ? { ...f, ...patch } : f,
+              ),
+            },
+      ),
+    }));
+  }
+
+  function removeFlight(dayId: string, flightId: string) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              flight: undefined,
+              flights: (d.flights ?? []).filter((f) => f.id !== flightId),
+            },
+      ),
+    }));
+  }
+
+  function addHotel(dayId: string) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              stay: undefined,
+              hotels: [
+                ...(d.hotels ?? []),
+                {
+                  id: newId("h"),
+                  name: "",
+                  url: "",
+                  address: "",
+                  price: "",
+                },
+              ],
+            },
+      ),
+    }));
+  }
+
+  function updateHotel(
+    dayId: string,
+    hotelId: string,
+    patch: Partial<TripHotel>,
+  ) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              stay: undefined,
+              hotels: (d.hotels ?? []).map((h) =>
+                h.id === hotelId ? { ...h, ...patch } : h,
+              ),
+            },
+      ),
+    }));
+  }
+
+  function removeHotel(dayId: string, hotelId: string) {
+    if (readOnly) return;
+    setPlanAndPersist((prev) => ({
+      ...prev,
+      days: prev.days.map((d) =>
+        d.id !== dayId
+          ? d
+          : {
+              ...d,
+              stay: undefined,
+              hotels: (d.hotels ?? []).filter((h) => h.id !== hotelId),
+            },
+      ),
+    }));
+  }
+
   function addPhotos(dayId: string, photos: TripPhoto[]) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -269,7 +482,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     patch: Partial<TripPhoto>,
   ) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -286,7 +499,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   function removePhoto(dayId: string, photoId: string) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -322,7 +535,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     patch: Partial<TripScheduleItem>,
   ) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -339,7 +552,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   function addScheduleItem(dayId: string) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -357,7 +570,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   function removeScheduleItem(dayId: string, itemId: string) {
     if (readOnly) return;
-    setPlan((prev) => ({
+    setPlanAndPersist((prev) => ({
       ...prev,
       days: prev.days.map((d) =>
         d.id !== dayId
@@ -402,7 +615,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
       }
 
       if (!plan.writeKeyHash) {
-        setPlan((prev) => ({ ...prev, writeKeyHash: hash }));
+        setPlanAndPersist((prev) => ({ ...prev, writeKeyHash: hash }));
       }
 
       localStorage.setItem(wkey, value);
@@ -423,7 +636,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
     try {
       const hash = await sha256Hex(value);
-      setPlan((prev) => ({ ...prev, writeKeyHash: hash }));
+      setPlanAndPersist((prev) => ({ ...prev, writeKeyHash: hash }));
       localStorage.setItem(wkey, value);
       setWriteKeyValue(value);
       setIsUnlocked(true);
@@ -442,8 +655,9 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
         setCloudInfo("云端暂无数据");
         return;
       }
-      setPlan(data.plan as TripPlan);
-      setActiveDayId((data.plan as TripPlan).days?.[0]?.id ?? activeDayId);
+      const normalized = normalizeTripPlan(data.plan as TripPlan);
+      setPlanAndPersist(normalized);
+      setActiveDayId(normalized.days?.[0]?.id ?? activeDayId);
       setCloudUpdatedAt(data.updatedAt ?? null);
       setCloudInfo("已从云端拉取");
     } catch (e) {
@@ -481,7 +695,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
   function resetToDefault() {
     localStorage.removeItem(key);
     localStorage.removeItem(wkey);
-    setPlan(defaultTrip);
+    setPlanAndPersist(defaultTrip);
     setActiveDayId(defaultTrip.days[0]?.id ?? "");
     setIsUnlocked(true);
     setWriteKeyValue(null);
@@ -496,12 +710,13 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     const raw = await file.text();
     const parsed = JSON.parse(raw) as TripPlan;
     if (!parsed?.slug || parsed.slug !== trip.slug) return;
-    setPlan(parsed);
-    setActiveDayId(parsed.days[0]?.id ?? "");
+    const normalized = normalizeTripPlan(parsed);
+    setPlanAndPersist(normalized);
+    setActiveDayId(normalized.days[0]?.id ?? "");
   }
 
   return (
-    <div className="flex-1 bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
+    <div className="flex-1 bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10">
         <header className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -518,7 +733,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               <input
                 value={plan.subtitle ?? ""}
                 onChange={(e) => updatePlan({ subtitle: e.target.value })}
-                className="w-full bg-transparent text-sm text-zinc-600 outline-none dark:text-zinc-400"
+                className="vv-muted w-full bg-transparent text-sm outline-none"
                 placeholder="一句话备注（可选）"
                 aria-label="Trip subtitle"
                 readOnly={readOnly}
@@ -530,15 +745,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 className={[
                   "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium",
                   readOnly
-                    ? "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                    : "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
+                    ? "vv-badge-readonly"
+                    : "vv-badge-editable",
                 ].join(" ")}
               >
                 {readOnly ? "只读" : "可编辑"}
               </div>
 
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={pullFromCloud}
                 type="button"
                 disabled={cloudBusy}
@@ -546,7 +761,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 云端拉取
               </button>
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={saveToCloud}
                 type="button"
                 disabled={cloudBusy}
@@ -555,7 +770,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               </button>
 
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                onClick={() => setOverviewOpen(true)}
+                type="button"
+              >
+                一页展示
+              </button>
+
+              <button
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() =>
                   downloadJson(`${plan.slug}.json`, {
                     exportedAt: new Date().toISOString(),
@@ -567,14 +790,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 导出 JSON
               </button>
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={triggerImport}
                 type="button"
               >
                 导入 JSON
               </button>
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={copyJsonToClipboard}
                 type="button"
               >
@@ -583,7 +806,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
               {!plan.writeKeyHash ? (
                 <button
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                  className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
                   onClick={() => openWriteKeyModal("set")}
                   type="button"
                 >
@@ -591,7 +814,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 </button>
               ) : readOnly ? (
                 <button
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white"
+                  className="vv-btn-primary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() => openWriteKeyModal("unlock")}
                   type="button"
                 >
@@ -600,7 +823,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               ) : (
                 <>
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={copyWriteKeyToClipboard}
                     type="button"
                     disabled={!writeKeyValue}
@@ -608,7 +831,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     复制口令
                   </button>
                   <button
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
                     onClick={() => openWriteKeyModal("rotate")}
                     type="button"
                   >
@@ -618,7 +841,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               )}
 
               <button
-                className="inline-flex h-10 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="vv-btn-primary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={resetToDefault}
                 type="button"
               >
@@ -647,22 +870,25 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               {cloudError}
             </div>
           ) : cloudInfo ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+            <div className="vv-card rounded-2xl px-4 py-3 text-sm">
               {cloudInfo}
               {cloudUpdatedAt ? `（${cloudUpdatedAt}）` : ""}
             </div>
           ) : null}
 
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p className="vv-muted text-sm">
             输入口令后即可修改内容；未输入口令时为只读。也可用“云端保存/拉取”同步，或用“导出/导入 JSON”分享备份。
           </p>
         </header>
 
-        <div className="relative overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+        <div
+          className="vv-panel relative overflow-hidden rounded-[28px]"
+          data-vv-theme={isSydneyTheme ? "sydney" : "default"}
+        >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(0,0,0,0.04),transparent_55%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(255,255,255,0.06),transparent_55%)]" />
 
-          <div className="relative border-b border-zinc-200 px-6 pb-5 pt-6 dark:border-zinc-800">
-            <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+          <div className="vv-divider relative border-b px-6 pb-5 pt-6">
+            <div className="vv-kicker text-xs font-medium tracking-wider">
               DAYS
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -676,8 +902,8 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     className={[
                       "rounded-full px-3 py-1.5 text-sm transition",
                       active
-                        ? "bg-zinc-900 text-white dark:bg-zinc-50 dark:text-zinc-950"
-                        : "bg-zinc-100 text-zinc-800 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
+                        ? "vv-day-active"
+                        : "vv-pill",
                     ].join(" ")}
                   >
                     {d.dateLabel}
@@ -689,21 +915,21 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
           <div className="relative grid grid-cols-1 md:grid-cols-[380px_1fr]">
             <div className="pointer-events-none absolute inset-y-0 left-[380px] hidden md:block">
-              <div className="absolute inset-y-0 left-0 w-px bg-zinc-200 dark:bg-zinc-800" />
+              <div className="vv-timeline-line absolute inset-y-0 left-0 w-px" />
               <div className="absolute inset-y-0 left-0 w-10 -translate-x-1/2">
-                <div className="absolute left-1/2 top-10 h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
-                <div className="absolute left-1/2 top-24 h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
-                <div className="absolute left-1/2 top-[9.5rem] h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
-                <div className="absolute left-1/2 top-52 h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
-                <div className="absolute left-1/2 top-[16.5rem] h-3 w-3 -translate-x-1/2 rounded-full border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950" />
+                <div className="vv-timeline-dot absolute left-1/2 top-10 h-3 w-3 -translate-x-1/2 rounded-full" />
+                <div className="vv-timeline-dot absolute left-1/2 top-24 h-3 w-3 -translate-x-1/2 rounded-full" />
+                <div className="vv-timeline-dot absolute left-1/2 top-[9.5rem] h-3 w-3 -translate-x-1/2 rounded-full" />
+                <div className="vv-timeline-dot absolute left-1/2 top-52 h-3 w-3 -translate-x-1/2 rounded-full" />
+                <div className="vv-timeline-dot absolute left-1/2 top-[16.5rem] h-3 w-3 -translate-x-1/2 rounded-full" />
               </div>
             </div>
 
-            <aside className="relative order-2 flex flex-col border-t border-zinc-200 dark:border-zinc-800 md:order-none md:border-t-0">
+            <aside className="vv-divider relative order-2 flex flex-col border-t md:order-none md:border-t-0">
               {activeDay ? (
                 <div className="flex flex-1 flex-col gap-6 px-6 pb-8 pt-6">
                   <div className="flex flex-col gap-3">
-                    <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                    <div className="vv-kicker text-xs font-medium tracking-wider">
                       TODAY
                     </div>
                     <input
@@ -718,33 +944,227 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
-                      LOGISTICS
+                    <div className="flex items-end justify-between">
+                      <div className="vv-kicker text-xs font-medium tracking-wider">
+                        TRANSPORT
+                      </div>
+                      <button
+                        type="button"
+                        className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => addFlight(activeDay.id)}
+                        disabled={readOnly}
+                      >
+                        新增
+                      </button>
                     </div>
-                    <textarea
-                      value={activeDay.flight ?? ""}
-                      onChange={(e) =>
-                        updateDay(activeDay.id, { flight: e.target.value })
-                      }
-                      className="min-h-16 w-full resize-none rounded-2xl border border-zinc-200 bg-white/70 p-4 text-sm leading-6 outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/50 dark:focus:border-zinc-700"
-                      placeholder="航班/交通（可选）：航班号、起降时间、出发/到达航站楼、集合点…"
-                      aria-label="Flight and transport"
-                      readOnly={readOnly}
-                    />
-                    <textarea
-                      value={activeDay.stay ?? ""}
-                      onChange={(e) =>
-                        updateDay(activeDay.id, { stay: e.target.value })
-                      }
-                      className="min-h-16 w-full resize-none rounded-2xl border border-zinc-200 bg-white/70 p-4 text-sm leading-6 outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/50 dark:focus:border-zinc-700"
-                      placeholder="酒店/住宿（可选）：酒店名、地址、入住/退房时间、预订编号…"
-                      aria-label="Hotel"
-                      readOnly={readOnly}
-                    />
+
+                    {(activeDay.flights ?? []).length === 0 ? (
+                      <div className="vv-empty rounded-2xl p-6 text-sm">
+                        暂无交通记录，可新增航班/交通信息。
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {(activeDay.flights ?? []).map((f) => (
+                          <div
+                            key={f.id}
+                            className="vv-card rounded-2xl p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-sm font-semibold">航班 / 交通</div>
+                              <button
+                                type="button"
+                                className="vv-btn-secondary inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                                onClick={() => removeFlight(activeDay.id, f.id)}
+                                disabled={readOnly}
+                              >
+                                删除
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-2">
+                              <input
+                                value={f.flightNo ?? ""}
+                                onChange={(e) =>
+                                  updateFlight(activeDay.id, f.id, {
+                                    flightNo: e.target.value,
+                                  })
+                                }
+                                className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                placeholder="航班号 / 车次 / 交通方式"
+                                aria-label="Flight number"
+                                readOnly={readOnly}
+                              />
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <input
+                                  value={f.departAt ?? ""}
+                                  onChange={(e) =>
+                                    updateFlight(activeDay.id, f.id, {
+                                      departAt: e.target.value,
+                                    })
+                                  }
+                                  className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                  placeholder="出发时间"
+                                  aria-label="Departure time"
+                                  readOnly={readOnly}
+                                />
+                                <input
+                                  value={f.arriveAt ?? ""}
+                                  onChange={(e) =>
+                                    updateFlight(activeDay.id, f.id, {
+                                      arriveAt: e.target.value,
+                                    })
+                                  }
+                                  className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                  placeholder="到达时间"
+                                  aria-label="Arrival time"
+                                  readOnly={readOnly}
+                                />
+                              </div>
+                              <input
+                                value={f.price ?? ""}
+                                onChange={(e) =>
+                                  updateFlight(activeDay.id, f.id, {
+                                    price: e.target.value,
+                                  })
+                                }
+                                className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                placeholder="价格（可选）"
+                                aria-label="Flight price"
+                                readOnly={readOnly}
+                              />
+
+                              <label className="vv-muted flex items-center gap-2 text-sm">
+                                <input
+                                  type="checkbox"
+                                  className="vv-checkbox h-4 w-4 rounded"
+                                  checked={Boolean(f.hasLayover)}
+                                  onChange={(e) =>
+                                    updateFlight(activeDay.id, f.id, {
+                                      hasLayover: e.target.checked,
+                                    })
+                                  }
+                                  aria-label="Has layover"
+                                  disabled={readOnly}
+                                />
+                                需要转机
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                    <div className="flex items-end justify-between">
+                      <div className="vv-kicker text-xs font-medium tracking-wider">
+                        STAY
+                      </div>
+                      <button
+                        type="button"
+                        className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => addHotel(activeDay.id)}
+                        disabled={readOnly}
+                      >
+                        新增
+                      </button>
+                    </div>
+
+                    {(activeDay.hotels ?? []).length === 0 ? (
+                      <div className="vv-empty rounded-2xl p-6 text-sm">
+                        暂无住宿记录，可新增酒店信息。
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {(activeDay.hotels ?? []).map((h) => (
+                          <div
+                            key={h.id}
+                            className="vv-card rounded-2xl p-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="text-sm font-semibold">酒店 / 住宿</div>
+                              <button
+                                type="button"
+                                className="vv-btn-secondary inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                                onClick={() => removeHotel(activeDay.id, h.id)}
+                                disabled={readOnly}
+                              >
+                                删除
+                              </button>
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  value={h.name ?? ""}
+                                  onChange={(e) =>
+                                    updateHotel(activeDay.id, h.id, {
+                                      name: e.target.value,
+                                    })
+                                  }
+                                  className="vv-input h-11 w-full flex-1 rounded-2xl px-4 text-sm outline-none"
+                                  placeholder="名称"
+                                  aria-label="Hotel name"
+                                  readOnly={readOnly}
+                                />
+                                {h.url?.trim() ? (
+                                  <a
+                                    className="vv-btn-ghost inline-flex h-11 items-center justify-center rounded-2xl px-4 text-sm font-medium"
+                                    href={toHttpUrl(h.url)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    前往
+                                  </a>
+                                ) : null}
+                              </div>
+                              <input
+                                value={h.url ?? ""}
+                                onChange={(e) =>
+                                  updateHotel(activeDay.id, h.id, {
+                                    url: e.target.value,
+                                  })
+                                }
+                                className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                placeholder="酒店链接（可选）"
+                                aria-label="Hotel url"
+                                readOnly={readOnly}
+                              />
+                              <input
+                                value={h.address ?? ""}
+                                onChange={(e) =>
+                                  updateHotel(activeDay.id, h.id, {
+                                    address: e.target.value,
+                                  })
+                                }
+                                className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                placeholder="地址"
+                                aria-label="Hotel address"
+                                readOnly={readOnly}
+                              />
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <input
+                                  value={h.price ?? ""}
+                                  onChange={(e) =>
+                                    updateHotel(activeDay.id, h.id, {
+                                      price: e.target.value,
+                                    })
+                                  }
+                                  className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
+                                  placeholder="价格（可选）"
+                                  aria-label="Hotel price"
+                                  readOnly={readOnly}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <div className="vv-kicker text-xs font-medium tracking-wider">
                       NOTES
                     </div>
                     <textarea
@@ -752,7 +1172,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       onChange={(e) =>
                         updateDay(activeDay.id, { notes: e.target.value })
                       }
-                      className="min-h-44 w-full resize-none rounded-2xl border border-zinc-200 bg-white/70 p-4 text-sm leading-6 outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/50 dark:focus:border-zinc-700"
+                      className="vv-input min-h-44 w-full resize-none rounded-2xl p-4 text-sm leading-6 outline-none"
                       placeholder="随手记：酒店地址、换钱、集合点、打车信息、图片/小红书素材…"
                       aria-label="Notes"
                       readOnly={readOnly}
@@ -761,12 +1181,12 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                   <div className="flex flex-col gap-3">
                     <div className="flex items-end justify-between">
-                      <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                      <div className="vv-kicker text-xs font-medium tracking-wider">
                         PHOTOS
                       </div>
                       <button
                         type="button"
-                        className="inline-flex h-9 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                        className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={triggerPhotoUpload}
                         disabled={readOnly}
                       >
@@ -787,7 +1207,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     </div>
 
                     {(activeDay.photos ?? []).length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+                      <div className="vv-empty rounded-2xl p-6 text-sm">
                         这里可以放酒店/航班信息截图、以及游玩照片。上传后会保存在本地，并会跟随导出 JSON 一起分享。
                       </div>
                     ) : (
@@ -796,7 +1216,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                           <button
                             key={p.id}
                             type="button"
-                            className="group relative aspect-square overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                            className="vv-card group relative aspect-square overflow-hidden rounded-2xl"
                             onClick={() =>
                               setPhotoModal({ dayId: activeDay.id, photoId: p.id })
                             }
@@ -824,15 +1244,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               ) : null}
             </aside>
 
-            <section className="relative order-1 flex flex-col border-b border-zinc-200 px-6 pb-8 pt-6 dark:border-zinc-800 md:order-none md:border-b-0">
+            <section className="vv-divider relative order-1 flex flex-col border-b px-6 pb-8 pt-6 md:order-none md:border-b-0">
               <div className="flex flex-col gap-2">
                 <div className="flex items-end justify-between">
-                  <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                  <div className="vv-kicker text-xs font-medium tracking-wider">
                     ITINERARY
                   </div>
                   <button
                     type="button"
-                    className="inline-flex h-9 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                     onClick={() => activeDay && addScheduleItem(activeDay.id)}
                     disabled={readOnly}
                   >
@@ -843,14 +1263,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 {activeDay ? (
                   <div className="mt-4 flex flex-col gap-3">
                     {activeDay.schedule.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-zinc-300 p-6 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+                      <div className="vv-empty rounded-2xl p-6 text-sm">
                         还没有行程条目，点“新增一条”开始。
                       </div>
                     ) : (
                       activeDay.schedule.map((item) => (
                         <div
                           key={item.id}
-                          className="group grid grid-cols-[92px_1fr] gap-3 rounded-2xl border border-zinc-200 bg-white/70 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/40"
+                          className="vv-card group grid grid-cols-[92px_1fr] gap-3 rounded-2xl p-4"
                         >
                           <input
                             value={item.time ?? ""}
@@ -859,7 +1279,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                                 time: e.target.value,
                               })
                             }
-                            className="w-full bg-transparent text-sm font-medium text-zinc-700 outline-none dark:text-zinc-200"
+                            className="vv-muted w-full bg-transparent text-sm font-medium outline-none"
                             placeholder="时间"
                             aria-label="Time"
                             readOnly={readOnly}
@@ -884,7 +1304,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                                 onClick={() =>
                                   removeScheduleItem(activeDay.id, item.id)
                                 }
-                                className="invisible inline-flex h-8 items-center justify-center rounded-full bg-zinc-100 px-3 text-xs font-medium text-zinc-700 hover:bg-zinc-200 group-hover:visible dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="vv-btn-secondary invisible inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium group-hover:visible disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={readOnly}
                               >
                                 删除
@@ -897,7 +1317,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                                   detail: e.target.value,
                                 })
                               }
-                              className="min-h-20 w-full resize-none rounded-xl border border-zinc-200 bg-white/80 p-3 text-sm leading-6 outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950/70 dark:focus:border-zinc-700"
+                              className="vv-input min-h-20 w-full resize-none rounded-xl p-3 text-sm leading-6 outline-none"
                               placeholder="补充信息：地址/门票/集合点/注意事项"
                               aria-label="Detail"
                               readOnly={readOnly}
@@ -913,10 +1333,10 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           </div>
         </div>
 
-        <footer className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+        <footer className="vv-muted text-xs leading-6">
           Powered by{" "}
           <a
-            className="font-medium text-zinc-900 hover:underline dark:text-zinc-50"
+            className="vv-link font-medium"
             href="https://jimmiewang.com"
             target="_blank"
             rel="noopener noreferrer"
@@ -924,6 +1344,173 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
             jimmiewang.com
           </a>
         </footer>
+
+        {overviewOpen ? (
+          <div
+            className="print-root fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="一页展示"
+            onClick={() => setOverviewOpen(false)}
+          >
+            <div
+              className="print-modal vv-panel w-full max-w-5xl overflow-hidden rounded-[28px]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="no-print vv-divider flex items-center justify-between gap-3 border-b px-5 py-4">
+                <div className="text-sm font-semibold">一页展示（可打印 / 导出 PDF）</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                    onClick={() => window.print()}
+                  >
+                    打印 / PDF
+                  </button>
+                  <button
+                    type="button"
+                    className="vv-btn-ghost inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium"
+                    onClick={() => setOverviewOpen(false)}
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+
+              <div className="print-scroll max-h-[80vh] overflow-auto p-6">
+                <div className="flex flex-col gap-2">
+                  <div className="text-2xl font-semibold tracking-tight">{plan.title}</div>
+                  {plan.subtitle ? (
+                    <div className="vv-muted text-sm">{plan.subtitle}</div>
+                  ) : null}
+                  <div className="vv-muted text-xs">{plan.slug}</div>
+                </div>
+
+                <div className="mt-6 flex flex-col gap-5">
+                  {plan.days.map((d) => (
+                    <section
+                      key={d.id}
+                      className="vv-card print-day rounded-3xl p-5"
+                    >
+                      <div className="flex flex-wrap items-baseline justify-between gap-3">
+                        <div className="text-lg font-semibold">{d.dateLabel}</div>
+                        <div className="vv-muted text-sm font-medium">{d.city}</div>
+                      </div>
+
+                      {d.flights && d.flights.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="vv-kicker text-xs font-medium tracking-wider">
+                            TRANSPORT
+                          </div>
+                          <div className="mt-2 flex flex-col gap-2">
+                            {d.flights.map((f) => (
+                              <div
+                                key={f.id}
+                                className="vv-card rounded-2xl p-4 text-sm"
+                              >
+                                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                                  <div className="font-medium">{f.flightNo || "（未填写）"}</div>
+                                  {f.hasLayover ? (
+                                    <div className="vv-muted text-xs">需要转机</div>
+                                  ) : null}
+                                </div>
+                                <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                                  <div>出发：{f.departAt || "-"}</div>
+                                  <div>到达：{f.arriveAt || "-"}</div>
+                                  <div className="sm:col-span-2">
+                                    价格：{f.price || "-"}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {d.hotels && d.hotels.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="vv-kicker text-xs font-medium tracking-wider">
+                            STAY
+                          </div>
+                          <div className="mt-2 flex flex-col gap-2">
+                            {d.hotels.map((h) => (
+                              <div
+                                key={h.id}
+                                className="vv-card rounded-2xl p-4 text-sm"
+                              >
+                                <div className="font-medium">
+                                  {h.name || "（未填写）"}
+                                  {h.url?.trim() ? (
+                                    <>
+                                      {" "}
+                                      <a
+                                        className="vv-link text-sm font-medium"
+                                        href={toHttpUrl(h.url)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        前往
+                                      </a>
+                                    </>
+                                  ) : null}
+                                </div>
+                                <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                                  <div className="sm:col-span-2">
+                                    地址：{h.address || "-"}
+                                  </div>
+                                  <div>价格：{h.price || "-"}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {d.schedule.length > 0 ? (
+                        <div className="mt-4">
+                          <div className="vv-kicker text-xs font-medium tracking-wider">
+                            ITINERARY
+                          </div>
+                          <div className="mt-2 flex flex-col gap-2">
+                            {d.schedule.map((s) => (
+                              <div
+                                key={s.id}
+                                className="vv-card rounded-2xl p-4"
+                              >
+                                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                                  <div className="text-sm font-semibold">{s.title}</div>
+                                  <div className="vv-muted text-xs font-medium">
+                                    {s.time || ""}
+                                  </div>
+                                </div>
+                                {s.detail ? (
+                                  <div className="mt-2 whitespace-pre-wrap text-sm leading-6">
+                                    {s.detail}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {d.notes ? (
+                        <div className="mt-4">
+                          <div className="vv-kicker text-xs font-medium tracking-wider">
+                            NOTES
+                          </div>
+                          <div className="vv-card mt-2 whitespace-pre-wrap rounded-2xl p-4 text-sm leading-6">
+                            {d.notes}
+                          </div>
+                        </div>
+                      ) : null}
+                    </section>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {writeKeyModalOpen ? (
           <div
@@ -934,11 +1521,11 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
             onClick={() => setWriteKeyModalOpen(false)}
           >
             <div
-              className="w-full max-w-lg overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+              className="vv-panel w-full max-w-lg overflow-hidden rounded-[28px]"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              <div className="vv-divider flex items-center justify-between gap-3 border-b px-5 py-4">
+                <div className="text-sm font-semibold">
                   {writeKeyModalMode === "unlock"
                     ? "输入编辑口令"
                     : writeKeyModalMode === "set"
@@ -947,7 +1534,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                  className="vv-btn-ghost inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium"
                   onClick={() => setWriteKeyModalOpen(false)}
                 >
                   关闭
@@ -956,13 +1543,13 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
               <div className="flex flex-col gap-4 p-5">
                 <div className="flex flex-col gap-2">
-                  <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                  <div className="vv-kicker text-xs font-medium tracking-wider">
                     WRITE KEY
                   </div>
                   <input
                     value={writeKeyInput}
                     onChange={(e) => setWriteKeyInput(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-700"
+                    className="vv-input h-12 w-full rounded-2xl px-4 text-sm outline-none"
                     placeholder="建议用不易猜的短语/数字组合（至少 6 位）"
                     aria-label="Write key"
                   />
@@ -973,7 +1560,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   ) : null}
                 </div>
 
-                <div className="flex flex-col gap-2 text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+                <div className="vv-muted flex flex-col gap-2 text-xs leading-6">
                   <div>
                     - 只读链接可以公开分享；要允许他人编辑，把口令单独发给同伴。
                   </div>
@@ -985,14 +1572,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-800"
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium"
                     onClick={() => setWriteKeyModalOpen(false)}
                   >
                     取消
                   </button>
                   <button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white"
+                    className="vv-btn-primary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
                     onClick={() =>
                       writeKeyModalMode === "rotate"
                         ? rotateWriteKey()
@@ -1025,17 +1612,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 onClick={() => setPhotoModal(null)}
               >
                 <div
-                  className="w-full max-w-3xl overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900"
+                  className="vv-panel w-full max-w-3xl overflow-hidden rounded-[28px]"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                      照片
-                    </div>
+                  <div className="vv-divider flex items-center justify-between gap-3 border-b px-5 py-4">
+                    <div className="text-sm font-semibold">照片</div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="vv-btn-danger inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => {
                           removePhoto(day.id, photo.id);
                           setPhotoModal(null);
@@ -1046,7 +1631,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       </button>
                       <button
                         type="button"
-                        className="inline-flex h-9 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-white"
+                        className="vv-btn-ghost inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium"
                         onClick={() => setPhotoModal(null)}
                       >
                         关闭
@@ -1055,7 +1640,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   </div>
 
                   <div className="grid grid-cols-1 gap-0 md:grid-cols-[1.2fr_0.8fr]">
-                    <div className="bg-zinc-950">
+                    <div className="bg-black">
                       <img
                         src={photo.dataUrl}
                         alt={photo.caption?.trim() ? photo.caption : "photo"}
@@ -1064,7 +1649,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     </div>
                     <div className="flex flex-col gap-4 p-5">
                       <div className="flex flex-col gap-2">
-                        <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                        <div className="vv-kicker text-xs font-medium tracking-wider">
                           TAG
                         </div>
                         <select
@@ -1074,7 +1659,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                               tag: e.target.value as TripPhotoTag,
                             })
                           }
-                          className="h-11 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-700"
+                          className="vv-input h-11 w-full rounded-2xl px-4 text-sm outline-none"
                           aria-label="Photo tag"
                           disabled={readOnly}
                         >
@@ -1086,7 +1671,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       </div>
 
                       <div className="flex flex-col gap-2">
-                        <div className="text-xs font-medium tracking-wider text-zinc-500 dark:text-zinc-400">
+                        <div className="vv-kicker text-xs font-medium tracking-wider">
                           CAPTION
                         </div>
                         <textarea
@@ -1096,14 +1681,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                               caption: e.target.value,
                             })
                           }
-                          className="min-h-32 w-full resize-none rounded-2xl border border-zinc-200 bg-white p-4 text-sm leading-6 outline-none focus:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:focus:border-zinc-700"
+                          className="vv-input min-h-32 w-full resize-none rounded-2xl p-4 text-sm leading-6 outline-none"
                           placeholder="一句话备注：比如酒店名称、票价、集合点、当天亮点…"
                           aria-label="Photo caption"
                           readOnly={readOnly}
                         />
                       </div>
 
-                      <div className="text-xs leading-6 text-zinc-500 dark:text-zinc-400">
+                      <div className="vv-muted text-xs leading-6">
                         上传的照片会压缩后保存到本地，并会跟随导出 JSON 一起分享；照片越多导出的 JSON 也会越大。
                       </div>
                     </div>

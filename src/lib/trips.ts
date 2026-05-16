@@ -15,12 +15,31 @@ export type TripPhoto = {
   caption?: string;
 };
 
+export type TripFlight = {
+  id: string;
+  flightNo?: string;
+  departAt?: string;
+  arriveAt?: string;
+  price?: string;
+  hasLayover?: boolean;
+};
+
+export type TripHotel = {
+  id: string;
+  name?: string;
+  url?: string;
+  address?: string;
+  price?: string;
+};
+
 export type TripDay = {
   id: string;
   dateLabel: string;
   city: string;
   flight?: string;
   stay?: string;
+  flights?: TripFlight[];
+  hotels?: TripHotel[];
   notes?: string;
   photos?: TripPhoto[];
   schedule: TripScheduleItem[];
