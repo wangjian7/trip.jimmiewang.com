@@ -103,3 +103,6 @@
 - 踩坑记录:
   - 本地 `--local` 使用的是本地 D1；线上必须在 Pages 里配置 D1 binding，否则 API 会报 DB 未绑定或查询失败。
   - 如果只在本地迁移了 D1（local），线上仍会出现 `no such table: trips`，需要执行 `npm run d1:migrate:remote`。
+  - 若浏览器控制台看到 `api/trips/...` 返回 500 且页面显示 `error code: 1101`，通常是 Functions 运行时异常：
+    - 优先检查 Pages 项目是否已在 Production 环境配置 D1 binding（变量名必须为 `DB`）。
+    - 其次确认远端 D1 已执行迁移并存在 `trips` 表。
