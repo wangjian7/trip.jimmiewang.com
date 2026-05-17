@@ -77,6 +77,18 @@ function normalizeTripPlan(plan: TripPlan): TripPlan {
   };
 }
 
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function sha256Hex(text: string) {
   const data = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -163,6 +175,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   const [plan, setPlan] = useState<TripPlan>(() => normalizeTripPlan(trip));
   const [activeDayId, setActiveDayId] = useState(trip.days[0]?.id ?? "");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const titleRef = useRef<HTMLTextAreaElement | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -688,6 +701,20 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     setCloudInfo("已切换为只读");
   }
 
+  function triggerImport() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleImportFile(file: File | null) {
+    if (!file) return;
+    const raw = await file.text();
+    const parsed = JSON.parse(raw) as TripPlan;
+    if (!parsed?.slug || parsed.slug !== trip.slug) return;
+    const normalized = normalizeTripPlan(parsed);
+    setPlanAndPersist(normalized);
+    setActiveDayId(normalized.days[0]?.id ?? "");
+  }
+
   return (
     <div className="flex-1 bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10">
@@ -749,6 +776,41 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               >
                 一页展示
               </button>
+
+              {!readOnly ? (
+                <>
+                  <button
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() =>
+                      downloadJson(`${plan.slug}.json`, {
+                        exportedAt: new Date().toISOString(),
+                        plan,
+                      })
+                    }
+                    type="button"
+                  >
+                    导出 JSON
+                  </button>
+                  <button
+                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={triggerImport}
+                    type="button"
+                  >
+                    导入 JSON
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    className="hidden"
+                    type="file"
+                    accept="application/json"
+                    aria-label="导入 JSON 文件"
+                    title="导入 JSON 文件"
+                    onChange={(e) =>
+                      handleImportFile(e.target.files?.[0] ?? null)
+                    }
+                  />
+                </>
+              ) : null}
 
               {!plan.writeKeyHash ? (
                 <button
