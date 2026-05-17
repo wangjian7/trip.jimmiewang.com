@@ -9,7 +9,8 @@ export type TripPhotoTag = "hotel" | "flight" | "play" | "other";
 
 export type TripPhoto = {
   id: string;
-  dataUrl: string;
+  r2Key?: string;
+  dataUrl?: string;
   createdAt: string;
   tag?: TripPhotoTag;
   caption?: string;

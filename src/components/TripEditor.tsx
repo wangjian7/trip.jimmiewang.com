@@ -10,7 +10,13 @@ import type {
   TripPlan,
   TripScheduleItem,
 } from "@/lib/trips";
-import { getTripFromCloud, saveTripToCloud } from "@/lib/cloud";
+import {
+  deletePhotoFromCloud,
+  getCloudPhotoUrl,
+  getTripFromCloud,
+  saveTripToCloud,
+  uploadPhotoToCloud,
+} from "@/lib/cloud";
 
 function storageKey(slug: string) {
   return `trip-plan:${slug}`;
@@ -35,12 +41,46 @@ function toHttpUrl(raw: string) {
   return `https://${u}`;
 }
 
+function isTripPhotoTag(value: unknown): value is TripPhotoTag {
+  return value === "hotel" || value === "flight" || value === "play" || value === "other";
+}
+
+function getPhotoSrc(photo: TripPhoto) {
+  if (photo.r2Key) return getCloudPhotoUrl(photo.r2Key);
+  return photo.dataUrl ?? "";
+}
+
 function normalizeTripPlan(plan: TripPlan): TripPlan {
   return {
     ...plan,
     days: plan.days.map((d) => {
       const flights: TripFlight[] = Array.isArray(d.flights) ? d.flights : [];
       const hotels: TripHotel[] = Array.isArray(d.hotels) ? d.hotels : [];
+      const photos: TripPhoto[] = Array.isArray(d.photos)
+        ? d.photos.flatMap((photo) => {
+            if (!photo || typeof photo !== "object") return [];
+            const raw = photo as Partial<TripPhoto>;
+            const r2Key = typeof raw.r2Key === "string" ? raw.r2Key : undefined;
+            const dataUrl = typeof raw.dataUrl === "string" ? raw.dataUrl : undefined;
+            if (!r2Key && !dataUrl) return [];
+            return [
+              {
+                id:
+                  typeof raw.id === "string" && raw.id.trim()
+                    ? raw.id
+                    : newId("p"),
+                r2Key,
+                dataUrl,
+                createdAt:
+                  typeof raw.createdAt === "string" && raw.createdAt.trim()
+                    ? raw.createdAt
+                    : new Date().toISOString(),
+                tag: isTripPhotoTag(raw.tag) ? raw.tag : "other",
+                caption: typeof raw.caption === "string" ? raw.caption : "",
+              },
+            ];
+          })
+        : [];
 
       const shouldMigrateFlight = flights.length === 0 && Boolean(d.flight?.trim());
       const shouldMigrateHotel = hotels.length === 0 && Boolean(d.stay?.trim());
@@ -61,6 +101,7 @@ function normalizeTripPlan(plan: TripPlan): TripPlan {
               },
             ]
           : flights,
+        photos,
         hotels: shouldMigrateHotel
           ? [
               {
@@ -97,17 +138,8 @@ async function sha256Hex(text: string) {
     .join("");
 }
 
-function readBlobAsDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Failed to read blob"));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(blob);
-  });
-}
-
-async function compressImageToJpegDataUrl(file: File) {
-  const maxSize = 1600;
+async function compressImageToJpegBlob(file: File) {
+  const maxSize = 2048;
   const quality = 0.82;
 
   const bitmap = await (async () => {
@@ -154,7 +186,7 @@ async function compressImageToJpegDataUrl(file: File) {
     canvas.toBlob(resolve, "image/jpeg", quality),
   );
   if (!blob) throw new Error("Failed to encode image");
-  return readBlobAsDataUrl(blob);
+  return blob;
 }
 
 export function TripEditor({ trip }: { trip: TripPlan }) {
@@ -480,18 +512,6 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     }));
   }
 
-  function addPhotos(dayId: string, photos: TripPhoto[]) {
-    if (readOnly) return;
-    setPlanAndPersist((prev) => ({
-      ...prev,
-      days: prev.days.map((d) =>
-        d.id !== dayId
-          ? d
-          : { ...d, photos: [...(d.photos ?? []), ...photos] },
-      ),
-    }));
-  }
-
   function updatePhoto(
     dayId: string,
     photoId: string,
@@ -513,36 +533,105 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     }));
   }
 
-  function removePhoto(dayId: string, photoId: string) {
-    if (readOnly) return;
-    setPlanAndPersist((prev) => ({
-      ...prev,
-      days: prev.days.map((d) =>
-        d.id !== dayId
-          ? d
-          : { ...d, photos: (d.photos ?? []).filter((p) => p.id !== photoId) },
-      ),
-    }));
-  }
-
   function triggerPhotoUpload() {
     photoInputRef.current?.click();
   }
 
   async function handlePhotoFiles(dayId: string, files: FileList | null) {
     if (!files || files.length === 0) return;
+    if (!plan.writeKeyHash) {
+      setCloudError("请先设置编辑口令并至少云端保存一次，再上传照片。");
+      openWriteKeyModal("set");
+      return;
+    }
+    if (!writeKeyValue) {
+      setCloudError("需要先输入编辑口令，才能上传照片。");
+      openWriteKeyModal("unlock");
+      return;
+    }
+
     const list = Array.from(files);
-    const photos = await Promise.all(
-      list.map(async (file) => ({
-        id: newId("p"),
-        dataUrl: await compressImageToJpegDataUrl(file),
-        createdAt: new Date().toISOString(),
-        tag: "other" as TripPhotoTag,
-        caption: "",
-      })),
-    );
-    addPhotos(dayId, photos);
-    if (photoInputRef.current) photoInputRef.current.value = "";
+    try {
+      setCloudBusy(true);
+      setCloudError(null);
+      setCloudInfo(`正在上传 ${list.length} 张照片...`);
+      const photos = await Promise.all(
+        list.map(async (file) => {
+          const compressed = await compressImageToJpegBlob(file);
+          const uploadFile = new File(
+            [compressed],
+            `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`,
+            { type: "image/jpeg" },
+          );
+          const uploaded = await uploadPhotoToCloud(
+            plan.slug,
+            dayId,
+            writeKeyValue,
+            uploadFile,
+          );
+          return {
+            id: newId("p"),
+            r2Key: uploaded.key,
+            createdAt: new Date().toISOString(),
+            tag: "other" as TripPhotoTag,
+            caption: "",
+          };
+        }),
+      );
+
+      const nextPlan = normalizeTripPlan({
+        ...plan,
+        days: plan.days.map((d) =>
+          d.id !== dayId ? d : { ...d, photos: [...(d.photos ?? []), ...photos] },
+        ),
+      });
+      setPlanAndPersist(nextPlan);
+
+      const res = await saveTripToCloud(nextPlan.slug, writeKeyValue, nextPlan);
+      setCloudUpdatedAt(res.updatedAt ?? null);
+      setCloudInfo(`已上传 ${photos.length} 张照片并同步到云端`);
+    } catch (e) {
+      setCloudError(e instanceof Error ? e.message : "照片上传失败");
+    } finally {
+      setCloudBusy(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
+
+  async function removePhotoAndSync(dayId: string, photo: TripPhoto) {
+    if (readOnly) return;
+    if (!plan.writeKeyHash || !writeKeyValue) {
+      setCloudError("需要编辑口令才能删除云端照片。");
+      openWriteKeyModal(plan.writeKeyHash ? "unlock" : "set");
+      return;
+    }
+
+    try {
+      setCloudBusy(true);
+      setCloudError(null);
+      if (photo.r2Key) {
+        await deletePhotoFromCloud(plan.slug, photo.r2Key, writeKeyValue);
+      }
+
+      const nextPlan = normalizeTripPlan({
+        ...plan,
+        days: plan.days.map((d) =>
+          d.id !== dayId
+            ? d
+            : { ...d, photos: (d.photos ?? []).filter((p) => p.id !== photo.id) },
+        ),
+      });
+      setPlanAndPersist(nextPlan);
+
+      const res = await saveTripToCloud(nextPlan.slug, writeKeyValue, nextPlan);
+      setCloudUpdatedAt(res.updatedAt ?? null);
+      setCloudInfo("已删除照片并同步到云端");
+      setPhotoModal(null);
+    } catch (e) {
+      setCloudError(e instanceof Error ? e.message : "删除照片失败");
+    } finally {
+      setCloudBusy(false);
+    }
   }
 
   function updateScheduleItem(
@@ -1197,7 +1286,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         type="button"
                         className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={triggerPhotoUpload}
-                        disabled={readOnly}
+                        disabled={readOnly || cloudBusy}
                       >
                         上传
                       </button>
@@ -1217,7 +1306,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                     {(activeDay.photos ?? []).length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        这里可以放酒店/航班信息截图、以及游玩照片。上传后会保存在本地浏览器。
+                        这里可以放酒店/航班信息截图、以及游玩照片。上传后会压缩到 2048 并保存到云端 R2。
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -1233,7 +1322,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                             title="查看照片"
                           >
                             <img
-                              src={p.dataUrl}
+                              src={getPhotoSrc(p)}
                               alt={p.caption?.trim() ? p.caption : "photo"}
                               className="h-full w-full object-cover"
                               loading="lazy"
@@ -1631,10 +1720,9 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         type="button"
                         className="vv-btn-danger inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => {
-                          removePhoto(day.id, photo.id);
-                          setPhotoModal(null);
+                          void removePhotoAndSync(day.id, photo);
                         }}
-                        disabled={readOnly}
+                        disabled={readOnly || cloudBusy}
                       >
                         删除
                       </button>
@@ -1651,7 +1739,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   <div className="grid grid-cols-1 gap-0 md:grid-cols-[1.2fr_0.8fr]">
                     <div className="bg-black">
                       <img
-                        src={photo.dataUrl}
+                        src={getPhotoSrc(photo)}
                         alt={photo.caption?.trim() ? photo.caption : "photo"}
                         className="h-full w-full object-contain"
                       />
@@ -1698,7 +1786,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       </div>
 
                       <div className="vv-muted text-xs leading-6">
-                        上传的照片会压缩后保存到本地；照片越多占用的本地存储也会越大。
+                        上传的照片会先压缩到 2048，再写入 Cloudflare R2；删除时会同步删除云端对象。
                       </div>
                     </div>
                   </div>
