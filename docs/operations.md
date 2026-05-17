@@ -71,13 +71,14 @@
   - `GET http://localhost:8788/api/trips/<slug>` 返回 404 或 plan JSON。
   - `PUT http://localhost:8788/api/trips/<slug>` 携带 `x-write-key` 后能写入并返回 ok。
 
-### 部署到 Cloudflare Pages（生产环境：Static Export + Pages Functions + D1）
+### 部署到 Cloudflare Pages（生产环境：Static Export + Pages Functions + D1 + R2）
 - 场景:
-  - 部署 trip.jimmiewang.com 到 Cloudflare Pages，并启用 Functions（/functions）访问 D1，实现云端同步。
+  - 部署 trip.jimmiewang.com 到 Cloudflare Pages，并启用 Functions（/functions）访问 D1 与 R2，实现云端同步与照片上传。
 - 前置条件:
   - 代码已推送到 GitHub（或你使用的 Git 托管平台）。
   - Cloudflare Pages 已连接对应仓库，并能选择到本项目（trip.jimmiewang.com）。
   - 远端 D1 已创建，并在 `wrangler.toml` 配置 `[[d1_databases]]` 绑定名为 `DB`。
+  - 远端 R2 bucket 已创建，并在 `wrangler.toml` 配置 `[[r2_buckets]]` 绑定名为 `BUCKET`，bucket 为 `trip-photos`。
   - 远端 D1 已执行迁移（建表）：
     - `npm run d1:migrate:remote`
 - 执行步骤:
@@ -94,7 +95,12 @@
       - 选择 Environment: `Production`（若界面提供 Preview/Production 切换）
       - Variable name: `DB`
       - D1 database: `trip-jimmiewang-com`
+    - 在同一页面添加 R2 binding（Production）：
+      - 选择 Environment: `Production`
+      - Variable name: `BUCKET`
+      - R2 bucket: `trip-photos`
     - 若同时需要预览环境联调，建议也配置 Preview 环境的同名 `DB` 绑定（指向同一个或独立的 D1）。
+    - 若同时需要预览环境联调，建议也配置 Preview 环境的同名 `BUCKET` 绑定。
   - 域名绑定（可选）:
     - 在 Pages 项目中添加自定义域名 `trip.jimmiewang.com`，并按提示完成 DNS 记录配置。
 - 验证方式:
@@ -102,9 +108,15 @@
   - 访问 `https://<你的域名>/api/trips/au-2026-09-30`：
     - 初次应返回 404（云端还没保存）。
   - 页面点“设置口令”→“云端保存”，再 GET 同一 API 应返回 plan JSON。
+  - 页面点“上传”后，`POST /api/photos` 应返回 `ok: true`，并且 R2 bucket 中能看到以 `slug/dayId/...` 组织的对象 key。
 - 踩坑记录:
   - 本地 `--local` 使用的是本地 D1；线上必须在 Pages 里配置 D1 binding，否则 API 会报 DB 未绑定或查询失败。
+  - 本地 `wrangler pages dev` 默认也会使用本地 R2 持久化；本地上传成功并不代表 Cloudflare 控制台的真实 bucket 已出现文件。
   - 如果只在本地迁移了 D1（local），线上仍会出现 `no such table: trips`，需要执行 `npm run d1:migrate:remote`。
   - 若浏览器控制台看到 `api/trips/...` 返回 500 且页面显示 `error code: 1101`，通常是 Functions 运行时异常：
     - 优先检查 Pages 项目是否已在 Production 环境配置 D1 binding（变量名必须为 `DB`）。
     - 其次确认远端 D1 已执行迁移并存在 `trips` 表。
+  - 若浏览器控制台看到 `POST /api/photos` 返回 `500 {"error":"bucket_not_bound"}`，说明生产环境缺少 R2 binding：
+    - 打开 Pages 项目 Settings → Functions → Bindings。
+    - 在 Production 环境新增 `BUCKET` → `trip-photos`。
+    - 保存后重新触发部署，再次测试上传。

@@ -50,6 +50,8 @@ export type TripPlan = {
   slug: string;
   title: string;
   subtitle?: string;
+  startDate: string;
+  endDate: string;
   writeKeyHash?: string;
   days: TripDay[];
 };
@@ -59,6 +61,8 @@ export const trips: TripPlan[] = [
     slug: "au-2026-09-30",
     title: "澳洲海岸线：黄金海岸 → 凯恩斯 → 悉尼",
     subtitle: "2026 9/30–10/9（可按实际航班调整）",
+    startDate: "2026-09-30",
+    endDate: "2026-10-09",
     days: [
       {
         id: "d-0930",
@@ -179,6 +183,76 @@ export const trips: TripPlan[] = [
         stay: "返程",
         notes: "如果 10/8 没走，这一天走白天航班。",
         schedule: [{ id: "s-1009-1", time: "白天", title: "返程航班" }],
+      },
+    ],
+  },
+  {
+    slug: "dali-06-18",
+    title: "云南大理：6/18–6/22",
+    subtitle: "苍山洱海慢游 5 天",
+    startDate: "2026-06-18",
+    endDate: "2026-06-22",
+    days: [
+      {
+        id: "d-0618",
+        dateLabel: "6/18",
+        city: "出发 → 大理",
+        flight: "前往大理（航班/高铁待定）",
+        stay: "大理古城 / 洱海周边",
+        notes: "到达日以入住和熟悉周边为主，晚点到也能轻松衔接。",
+        schedule: [
+          { id: "s-0618-1", time: "上午", title: "出发前往大理" },
+          { id: "s-0618-2", time: "下午", title: "抵达 & 入住" },
+          { id: "s-0618-3", time: "晚上", title: "古城散步 + 晚餐" },
+        ],
+      },
+      {
+        id: "d-0619",
+        dateLabel: "6/19",
+        city: "大理",
+        stay: "大理古城 / 洱海周边",
+        notes: "适合先走古城和周边轻松路线，把节奏放慢。",
+        schedule: [
+          { id: "s-0619-1", time: "上午", title: "大理古城慢逛" },
+          { id: "s-0619-2", time: "下午", title: "三塔 / 周边咖啡馆" },
+          { id: "s-0619-3", time: "晚上", title: "古城夜景 + 晚餐" },
+        ],
+      },
+      {
+        id: "d-0620",
+        dateLabel: "6/20",
+        city: "大理",
+        stay: "洱海周边",
+        notes: "这一天可以重点放在洱海沿线，适合拍照和轻松停靠。",
+        schedule: [
+          { id: "s-0620-1", time: "上午", title: "环洱海 / 海边停靠" },
+          { id: "s-0620-2", time: "下午", title: "双廊 / 喜洲方向" },
+          { id: "s-0620-3", time: "晚上", title: "日落 + 晚餐" },
+        ],
+      },
+      {
+        id: "d-0621",
+        dateLabel: "6/21",
+        city: "大理",
+        stay: "大理",
+        notes: "可以安排半天山景或保留成自由活动日。",
+        schedule: [
+          { id: "s-0621-1", time: "上午", title: "可选：苍山方向" },
+          { id: "s-0621-2", time: "下午", title: "自由活动 / 补拍素材" },
+          { id: "s-0621-3", time: "晚上", title: "整理返程安排" },
+        ],
+      },
+      {
+        id: "d-0622",
+        dateLabel: "6/22",
+        city: "大理 → 返程",
+        flight: "返程（航班/高铁待定）",
+        stay: "返程",
+        notes: "预留足够去机场/车站的时间，轻装收尾。",
+        schedule: [
+          { id: "s-0622-1", time: "上午", title: "早餐 & 收拾行李" },
+          { id: "s-0622-2", time: "下午", title: "返程" },
+        ],
       },
     ],
   },

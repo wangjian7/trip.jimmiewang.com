@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   TripDay,
@@ -17,6 +18,11 @@ import {
   saveTripToCloud,
   uploadPhotoToCloud,
 } from "@/lib/cloud";
+
+const toolbarGhostClass =
+  "vv-toolbar-btn vv-toolbar-btn-ghost inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
+const toolbarPrimaryClass =
+  "vv-toolbar-btn vv-toolbar-btn-primary inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
 
 function storageKey(slug: string) {
   return `trip-plan:${slug}`;
@@ -48,6 +54,23 @@ function isTripPhotoTag(value: unknown): value is TripPhotoTag {
 function getPhotoSrc(photo: TripPhoto) {
   if (photo.r2Key) return getCloudPhotoUrl(photo.r2Key);
   return photo.dataUrl ?? "";
+}
+
+function ToolbarIcon({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className="vv-toolbar-btn__icon inline-flex h-5 w-5 items-center justify-center"
+    >
+      <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+        {children}
+      </svg>
+    </span>
+  );
 }
 
 function normalizeTripPlan(plan: TripPlan): TripPlan {
@@ -235,10 +258,25 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     () => plan.days.find((d) => d.id === activeDayId) ?? plan.days[0],
     [activeDayId, plan.days],
   );
-  const isSydneyTheme = useMemo(() => {
+  const activeTheme = useMemo(() => {
     const city = (activeDay?.city ?? "").toLowerCase();
-    return city.includes("悉尼") || city.includes("sydney");
-  }, [activeDay?.city]);
+    if (
+      ["d-0930", "d-1001", "d-1002"].includes(activeDay?.id ?? "") &&
+      (city.includes("黄金海岸") || city.includes("gold coast"))
+    ) {
+      return "gold-coast";
+    }
+    if (
+      ["d-1003", "d-1004", "d-1005"].includes(activeDay?.id ?? "") &&
+      (city.includes("凯恩斯") || city.includes("cairns"))
+    ) {
+      return "cairns";
+    }
+    if (city.includes("悉尼") || city.includes("sydney")) {
+      return "sydney";
+    }
+    return "default";
+  }, [activeDay?.city, activeDay?.id]);
 
   useEffect(() => {
     document.body.classList.toggle("print-mode", overviewOpen);
@@ -808,68 +846,153 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
     <div className="flex-1 bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-10">
         <header className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex flex-col gap-1">
-              <textarea
-                ref={titleRef}
-                value={plan.title}
-                onChange={(e) => updatePlan({ title: e.target.value })}
-                rows={1}
-                className="w-full resize-none overflow-hidden bg-transparent text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
-                aria-label="Trip title"
-                readOnly={readOnly}
+          <div className="flex flex-col gap-2">
+            <textarea
+              ref={titleRef}
+              value={plan.title}
+              onChange={(e) => updatePlan({ title: e.target.value })}
+              rows={1}
+              className="w-full resize-none overflow-hidden bg-transparent text-2xl font-semibold tracking-tight outline-none sm:text-3xl"
+              aria-label="Trip title"
+              readOnly={readOnly}
+            />
+            <input
+              value={plan.subtitle ?? ""}
+              onChange={(e) => updatePlan({ subtitle: e.target.value })}
+              className="vv-muted w-full bg-transparent text-sm outline-none"
+              placeholder="一句话备注（可选）"
+              aria-label="Trip subtitle"
+              readOnly={readOnly}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link href="/" className={toolbarGhostClass}>
+              <ToolbarIcon>
+                <path
+                  d="M7 4v4.2c0 1.3 1 2.3 2.3 2.3H16"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 4 4 7m3-3 3 3"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M16 10.5v2.3A3.2 3.2 0 0 1 12.8 16H6.6A2.6 2.6 0 0 1 4 13.4V7"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </ToolbarIcon>
+              返回首页
+            </Link>
+
+            <div
+              className={[
+                "vv-toolbar-badge inline-flex items-center justify-center rounded-xl px-5 text-sm font-medium",
+                readOnly
+                  ? "vv-badge-readonly"
+                  : "vv-badge-editable",
+              ].join(" ")}
+            >
+              <span
+                aria-hidden="true"
+                className={[
+                  "h-2.5 w-2.5 rounded-full",
+                  readOnly ? "bg-current/55" : "bg-current",
+                ].join(" ")}
               />
-              <input
-                value={plan.subtitle ?? ""}
-                onChange={(e) => updatePlan({ subtitle: e.target.value })}
-                className="vv-muted w-full bg-transparent text-sm outline-none"
-                placeholder="一句话备注（可选）"
-                aria-label="Trip subtitle"
-                readOnly={readOnly}
-              />
+              {readOnly ? "只读" : "可编辑"}
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <div
-                className={[
-                  "inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium",
-                  readOnly
-                    ? "vv-badge-readonly"
-                    : "vv-badge-editable",
-                ].join(" ")}
-              >
-                {readOnly ? "只读" : "可编辑"}
-              </div>
+            <button
+              className={toolbarGhostClass}
+              onClick={pullFromCloud}
+              type="button"
+              disabled={cloudBusy}
+            >
+              <ToolbarIcon>
+                <path
+                  d="M10 3v8"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="m6.8 8.2 3.2 3.3 3.2-3.3"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M4 14.5h12"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </ToolbarIcon>
+              云端拉取
+            </button>
+            <button
+              className={toolbarPrimaryClass}
+              onClick={saveToCloud}
+              type="button"
+              disabled={cloudBusy}
+            >
+              <ToolbarIcon>
+                <path
+                  d="M5 4.5h8.5L16 7v8.2A1.8 1.8 0 0 1 14.2 17H5.8A1.8 1.8 0 0 1 4 15.2V6.3A1.8 1.8 0 0 1 5.8 4.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M7 4.5v3h5v-3M7.4 13h5.2"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </ToolbarIcon>
+              云端保存
+            </button>
 
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={pullFromCloud}
-                type="button"
-                disabled={cloudBusy}
-              >
-                云端拉取
-              </button>
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={saveToCloud}
-                type="button"
-                disabled={cloudBusy}
-              >
-                云端保存
-              </button>
-
-              <button
-                className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
-                onClick={() => setOverviewOpen(true)}
-                type="button"
-              >
-                一页展示
-              </button>
-
-              {!readOnly ? (
+            <button
+              className={toolbarGhostClass}
+              onClick={() => setOverviewOpen(true)}
+              type="button"
+            >
+              <ToolbarIcon>
+                <rect
+                  x="4"
+                  y="4"
+                  width="12"
+                  height="12"
+                  rx="2.5"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+                <path
+                  d="M7 8h6M7 11h6M7 14h3.5"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                />
+              </ToolbarIcon>
+              一页展示
+            </button>
+            {!readOnly ? (
                 <>
                   <button
-                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className={toolbarGhostClass}
                     onClick={() =>
                       downloadJson(`${plan.slug}.json`, {
                         exportedAt: new Date().toISOString(),
@@ -878,13 +1001,55 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     }
                     type="button"
                   >
+                    <ToolbarIcon>
+                      <path
+                        d="M10 3v8"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="m6.8 8.2 3.2 3.3 3.2-3.3"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M5 15.5h10"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </ToolbarIcon>
                     导出 JSON
                   </button>
                   <button
-                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                    className={toolbarGhostClass}
                     onClick={triggerImport}
                     type="button"
                   >
+                    <ToolbarIcon>
+                      <path
+                        d="M10 16V8"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="m13.2 10.8-3.2-3.3-3.2 3.3"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M5 4.5h10"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                    </ToolbarIcon>
                     导入 JSON
                   </button>
                   <input
@@ -899,43 +1064,104 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     }
                   />
                 </>
-              ) : null}
+            ) : null}
 
-              {!plan.writeKeyHash ? (
+            {!plan.writeKeyHash ? (
                 <button
-                  className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                  className={toolbarGhostClass}
                   onClick={() => openWriteKeyModal("set")}
                   type="button"
                 >
+                  <ToolbarIcon>
+                    <path
+                      d="M7.8 9.2a2.7 2.7 0 1 1 3.9 2.4v1.2M6 9.5H4.5a1.5 1.5 0 1 0 0 3H6"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M10 14.5h4.8m-1.4-1.4 1.4 1.4-1.4 1.4"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </ToolbarIcon>
                   设置口令
                 </button>
-              ) : readOnly ? (
+            ) : readOnly ? (
                 <button
-                  className="vv-btn-primary inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+                  className={toolbarPrimaryClass}
                   onClick={() => openWriteKeyModal("unlock")}
                   type="button"
                 >
+                  <ToolbarIcon>
+                    <rect
+                      x="4.5"
+                      y="8.2"
+                      width="11"
+                      height="7.3"
+                      rx="2"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    />
+                    <path
+                      d="M7.2 8.2V6.8A2.8 2.8 0 0 1 10 4a2.8 2.8 0 0 1 2.8 2.8v1.4"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                    />
+                  </ToolbarIcon>
                   编辑
                 </button>
-              ) : (
+            ) : (
                 <>
                   <button
-                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                    className={toolbarGhostClass}
                     onClick={() => openWriteKeyModal("rotate")}
                     type="button"
                   >
+                    <ToolbarIcon>
+                      <path
+                        d="M6.3 7.2A4.7 4.7 0 0 1 14 8.5M13.7 12.8A4.7 4.7 0 0 1 6 11.5"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="m13.7 5.3.6 3-3 .6M6.3 14.7l-.6-3 3-.6"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </ToolbarIcon>
                     更换口令
                   </button>
                   <button
-                    className="vv-btn-ghost inline-flex h-10 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
+                    className={toolbarGhostClass}
                     onClick={lockToReadOnly}
                     type="button"
                   >
+                    <ToolbarIcon>
+                      <path
+                        d="M5 10.5c0-3.1 2.2-5.5 5-5.5s5 2.4 5 5.5"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M4.8 10.5h10.4V15a1.8 1.8 0 0 1-1.8 1.8H6.6A1.8 1.8 0 0 1 4.8 15v-4.5Z"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinejoin="round"
+                      />
+                    </ToolbarIcon>
                     回到只读模式
                   </button>
                 </>
-              )}
-            </div>
+            )}
           </div>
 
           {storageError ? (
@@ -962,7 +1188,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
         <div
           className="vv-panel relative overflow-hidden rounded-[28px]"
-          data-vv-theme={isSydneyTheme ? "sydney" : "default"}
+          data-vv-theme={activeTheme}
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(0,0,0,0.06),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(0,0,0,0.04),transparent_55%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.08),transparent_55%),radial-gradient(circle_at_80%_40%,rgba(255,255,255,0.06),transparent_55%)]" />
 

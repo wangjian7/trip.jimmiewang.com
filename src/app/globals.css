@@ -141,10 +141,94 @@ body {
     color: color-mix(in srgb, var(--vv-primary) 85%, #000000);
   }
 
+  .vv-toolbar-btn,
+  .vv-toolbar-badge {
+    min-height: 56px;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-radius: 12px;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease,
+      border-color 160ms ease;
+  }
+
+  .vv-toolbar-btn {
+    border: 1px solid color-mix(in srgb, var(--vv-accent-2) 18%, var(--vv-outline-variant));
+    box-shadow:
+      0 12px 26px color-mix(in srgb, #000000 10%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #ffffff 24%, transparent);
+  }
+
+  .vv-toolbar-btn:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 16px 34px color-mix(in srgb, #000000 12%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #ffffff 30%, transparent);
+  }
+
+  .vv-toolbar-btn__icon {
+    color: inherit;
+    opacity: 0.92;
+  }
+
+  .vv-toolbar-btn-ghost {
+    background: color-mix(in srgb, var(--vv-surface-lowest) 78%, transparent);
+    color: color-mix(in srgb, var(--vv-accent-2) 82%, var(--foreground));
+  }
+
+  .vv-toolbar-btn-ghost:hover {
+    background: color-mix(in srgb, var(--vv-accent-2) 9%, var(--vv-surface-lowest));
+  }
+
+  .vv-toolbar-btn-primary {
+    border-color: color-mix(in srgb, var(--vv-accent-2) 30%, transparent);
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vv-accent) 92%, #ffffff 8%),
+      color-mix(in srgb, var(--vv-accent-2) 90%, #ffffff 10%)
+    );
+    color: #ffffff;
+  }
+
+  .vv-toolbar-btn-primary:hover {
+    filter: brightness(0.985);
+  }
+
+  .vv-toolbar-badge {
+    gap: 10px;
+    border: 1px solid color-mix(in srgb, var(--vv-accent-2) 16%, var(--vv-outline-variant));
+    box-shadow:
+      0 10px 24px color-mix(in srgb, #000000 8%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent);
+  }
+
   .vv-card {
     border: 1px solid var(--vv-outline-variant);
     background: color-mix(in srgb, var(--vv-surface-lowest) 88%, transparent);
     box-shadow: 0 10px 30px color-mix(in srgb, #000000 10%, transparent);
+  }
+
+  .vv-home-card[data-vv-card-theme="sydney"] {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vv-gold) 18%, var(--vv-surface-lowest)),
+      color-mix(in srgb, var(--vv-ocean) 14%, var(--vv-surface-lowest)),
+      var(--vv-surface-lowest)
+    );
+  }
+
+  .vv-home-card[data-vv-card-theme="green"] {
+    background: linear-gradient(
+      140deg,
+      color-mix(in srgb, #d9f5c8 32%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #4fb86e 18%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #177a63 12%, var(--vv-surface-lowest)),
+      var(--vv-surface-lowest)
+    );
   }
 
   .vv-empty {
@@ -183,6 +267,32 @@ body {
       135deg,
       color-mix(in srgb, var(--vv-gold) 18%, var(--vv-surface-lowest)),
       color-mix(in srgb, var(--vv-ocean) 14%, var(--vv-surface-lowest)),
+      var(--vv-surface-lowest)
+    );
+  }
+
+  .vv-panel[data-vv-theme="gold-coast"] {
+    --vv-accent: #ff8a48;
+    --vv-accent-2: #d94f70;
+    --vv-kicker: #b04a63;
+    background: linear-gradient(
+      140deg,
+      color-mix(in srgb, #ffd38a 28%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #ff8a48 18%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #d94f70 12%, var(--vv-surface-lowest)),
+      var(--vv-surface-lowest)
+    );
+  }
+
+  .vv-panel[data-vv-theme="cairns"] {
+    --vv-accent: #4fb86e;
+    --vv-accent-2: #177a63;
+    --vv-kicker: #1a6a55;
+    background: linear-gradient(
+      140deg,
+      color-mix(in srgb, #d9f5c8 32%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #4fb86e 18%, var(--vv-surface-lowest)),
+      color-mix(in srgb, #177a63 12%, var(--vv-surface-lowest)),
       var(--vv-surface-lowest)
     );
   }

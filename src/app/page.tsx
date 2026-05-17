@@ -1,7 +1,25 @@
 import Link from "next/link";
 import { trips } from "@/lib/trips";
 
+function formatTripDateRange(startDate: string, endDate: string) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const format = (date: Date) =>
+    `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, "0")}月${String(
+      date.getDate(),
+    ).padStart(2, "0")}日`;
+  return `${format(start)} - ${format(end)}`;
+}
+
+function getHomeCardTheme(slug: string) {
+  if (slug === "au-2026-09-30") return "sydney";
+  if (slug === "dali-06-18") return "green";
+  return "default";
+}
+
 export default function Home() {
+  const sortedTrips = [...trips].sort((a, b) => a.startDate.localeCompare(b.startDate));
+
   return (
     <div className="flex flex-1 flex-col bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-14">
@@ -15,15 +33,16 @@ export default function Home() {
         </header>
 
         <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {trips.map((trip) => (
+          {sortedTrips.map((trip) => (
             <Link
               key={trip.slug}
               href={`/trips/${trip.slug}/`}
-              className="vv-card group rounded-[24px] p-6 transition hover:-translate-y-0.5 hover:shadow-2xl"
+              data-vv-card-theme={getHomeCardTheme(trip.slug)}
+              className="vv-card vv-home-card group rounded-[24px] p-6 transition hover:-translate-y-0.5 hover:shadow-2xl"
             >
               <div className="flex flex-col gap-2">
                 <div className="vv-kicker text-xs font-medium tracking-wider">
-                  TRIP
+                  {formatTripDateRange(trip.startDate, trip.endDate)}
                 </div>
                 <div className="text-lg font-semibold leading-7">
                   {trip.title}
