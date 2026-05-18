@@ -343,7 +343,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
         const data = await getTripFromCloud(trip.slug);
         if (cancelled) return;
         if (!data?.plan) {
-          setCloudInfo("云端暂无数据");
+          setCloudInfo("云端还没有内容");
           return;
         }
         const normalized = normalizeTripPlan(data.plan as TripPlan);
@@ -352,7 +352,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           normalized.days?.[0]?.id ?? (trip.days[0]?.id ?? ""),
         );
         setCloudUpdatedAt(data.updatedAt ?? null);
-        setCloudInfo("已从云端拉取");
+        setCloudInfo("已从云端恢复");
       } catch (e) {
         if (cancelled) return;
         setCloudError(e instanceof Error ? e.message : "云端拉取失败");
@@ -578,7 +578,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
   async function handlePhotoFiles(dayId: string, files: FileList | null) {
     if (!files || files.length === 0) return;
     if (!plan.writeKeyHash) {
-      setCloudError("请先设置编辑口令并至少云端保存一次，再上传照片。");
+      setCloudError("请先设置编辑口令，并先保存到云端一次，再上传照片。");
       openWriteKeyModal("set");
       return;
     }
@@ -627,7 +627,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
       const res = await saveTripToCloud(nextPlan.slug, writeKeyValue, nextPlan);
       setCloudUpdatedAt(res.updatedAt ?? null);
-      setCloudInfo(`已上传 ${photos.length} 张照片并同步到云端`);
+      setCloudInfo(`已上传 ${photos.length} 张照片`);
     } catch (e) {
       setCloudError(e instanceof Error ? e.message : "照片上传失败");
     } finally {
@@ -663,7 +663,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
       const res = await saveTripToCloud(nextPlan.slug, writeKeyValue, nextPlan);
       setCloudUpdatedAt(res.updatedAt ?? null);
-      setCloudInfo("已删除照片并同步到云端");
+      setCloudInfo("已删除照片");
       setPhotoModal(null);
     } catch (e) {
       setCloudError(e instanceof Error ? e.message : "删除照片失败");
@@ -783,14 +783,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
       setCloudError(null);
       const data = await getTripFromCloud(plan.slug);
       if (!data?.plan) {
-        setCloudInfo("云端暂无数据");
+        setCloudInfo("云端还没有内容");
         return;
       }
       const normalized = normalizeTripPlan(data.plan as TripPlan);
       setPlanAndPersist(normalized);
       setActiveDayId(normalized.days?.[0]?.id ?? activeDayId);
       setCloudUpdatedAt(data.updatedAt ?? null);
-      setCloudInfo("已从云端拉取");
+      setCloudInfo("已从云端恢复");
     } catch (e) {
       setCloudError(e instanceof Error ? e.message : "云端拉取失败");
     } finally {
@@ -800,7 +800,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
   async function saveToCloud() {
     if (!plan.writeKeyHash) {
-      setCloudError("请先设置编辑口令（writeKey），再保存到云端。");
+      setCloudError("请先设置编辑口令，再保存到云端。");
       openWriteKeyModal("set");
       return;
     }
@@ -860,7 +860,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               value={plan.subtitle ?? ""}
               onChange={(e) => updatePlan({ subtitle: e.target.value })}
               className="vv-muted w-full bg-transparent text-sm outline-none"
-              placeholder="一句话备注（可选）"
+              placeholder="一句话说明（可选）"
               aria-label="Trip subtitle"
               readOnly={readOnly}
             />
@@ -939,7 +939,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   strokeLinecap="round"
                 />
               </ToolbarIcon>
-              云端拉取
+              从云端恢复
             </button>
             <button
               className={toolbarPrimaryClass}
@@ -962,7 +962,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   strokeLinejoin="round"
                 />
               </ToolbarIcon>
-              云端保存
+              保存到云端
             </button>
 
             <button
@@ -1022,7 +1022,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         strokeLinecap="round"
                       />
                     </ToolbarIcon>
-                    导出 JSON
+                    导出备份
                   </button>
                   <button
                     className={toolbarGhostClass}
@@ -1050,15 +1050,15 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         strokeLinecap="round"
                       />
                     </ToolbarIcon>
-                    导入 JSON
+                    导入备份
                   </button>
                   <input
                     ref={fileInputRef}
                     className="hidden"
                     type="file"
                     accept="application/json"
-                    aria-label="导入 JSON 文件"
-                    title="导入 JSON 文件"
+                    aria-label="导入备份文件"
+                    title="导入备份文件"
                     onChange={(e) =>
                       handleImportFile(e.target.files?.[0] ?? null)
                     }
@@ -1088,7 +1088,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       strokeLinejoin="round"
                     />
                   </ToolbarIcon>
-                  设置口令
+                  设置编辑口令
                 </button>
             ) : readOnly ? (
                 <button
@@ -1113,7 +1113,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                       strokeLinecap="round"
                     />
                   </ToolbarIcon>
-                  编辑
+                  开始编辑
                 </button>
             ) : (
                 <>
@@ -1137,7 +1137,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         strokeLinejoin="round"
                       />
                     </ToolbarIcon>
-                    更换口令
+                    更换编辑口令
                   </button>
                   <button
                     className={toolbarGhostClass}
@@ -1158,7 +1158,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         strokeLinejoin="round"
                       />
                     </ToolbarIcon>
-                    回到只读模式
+                    切换为只读
                   </button>
                 </>
             )}
@@ -1182,7 +1182,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
           ) : null}
 
           <p className="vv-muted text-sm">
-            输入口令后即可修改内容；未输入口令时为只读。也可用“云端保存/拉取”进行同步。
+            输入编辑口令后即可修改内容；平时可保持只读，需要时再切换。也可以通过“保存到云端 / 从云端恢复”保持同步。
           </p>
         </header>
 
@@ -1280,7 +1280,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                     {(activeDay.flights ?? []).length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        暂无交通记录，可新增航班/交通信息。
+                        还没有交通安排，点“新增”开始记录。
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
@@ -1396,7 +1396,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                     {(activeDay.hotels ?? []).length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        暂无住宿记录，可新增酒店信息。
+                        还没有住宿信息，点“新增”开始记录。
                       </div>
                     ) : (
                       <div className="flex flex-col gap-3">
@@ -1497,7 +1497,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         updateDay(activeDay.id, { notes: e.target.value })
                       }
                       className="vv-input min-h-44 w-full resize-none rounded-2xl p-4 text-sm leading-6 outline-none"
-                      placeholder="随手记：酒店地址、换钱、集合点、打车信息、图片/小红书素材…"
+                      placeholder="随手记：酒店地址、集合点、打车信息、换钱提醒、拍照灵感…"
                       aria-label="Notes"
                       readOnly={readOnly}
                     />
@@ -1532,7 +1532,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                     {(activeDay.photos ?? []).length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        这里可以放酒店/航班信息截图、以及游玩照片。上传后会压缩到 2048 并保存到云端 R2。
+                        可以放酒店或航班截图，也可以放当天拍的照片。上传时会自动压缩到 2048。
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -1588,7 +1588,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   <div className="mt-4 flex flex-col gap-3">
                     {activeDay.schedule.length === 0 ? (
                       <div className="vv-empty rounded-2xl p-6 text-sm">
-                        还没有行程条目，点“新增一条”开始。
+                        还没有具体安排，点“新增一条”开始。
                       </div>
                     ) : (
                       activeDay.schedule.map((item) => (
@@ -1682,14 +1682,14 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="no-print vv-divider flex items-center justify-between gap-3 border-b px-5 py-4">
-                <div className="text-sm font-semibold">一页展示（可打印 / 导出 PDF）</div>
+                <div className="text-sm font-semibold">概览打印页</div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     className="vv-btn-primary inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium shadow-sm"
                     onClick={() => window.print()}
                   >
-                    打印 / PDF
+                    打印或导出 PDF
                   </button>
                   <button
                     type="button"
@@ -1874,7 +1874,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     value={writeKeyInput}
                     onChange={(e) => setWriteKeyInput(e.target.value)}
                     className="vv-input h-12 w-full rounded-2xl px-4 text-sm outline-none"
-                    placeholder="建议用不易猜的短语/数字组合（至少 6 位）"
+                    placeholder="建议用不容易猜到的短语或数字组合（至少 6 位）"
                     aria-label="Write key"
                   />
                   {writeKeyError ? (
@@ -1886,10 +1886,10 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
 
                 <div className="vv-muted flex flex-col gap-2 text-xs leading-6">
                   <div>
-                    - 只读链接可以公开分享；要允许他人编辑，把口令单独发给同伴。
+                    - 只读链接可以直接分享；如果要一起编辑，把口令单独发给同伴。
                   </div>
                   <div>
-                    - 口令仅用于写入门槛，不是账号体系；泄露后任何人都能编辑。
+                    - 编辑口令不是账号密码；一旦泄露，拿到链接的人也可以修改内容。
                   </div>
                 </div>
 
@@ -1936,12 +1936,13 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                 onClick={() => setPhotoModal(null)}
               >
                 <div
-                  className="vv-panel w-full max-w-3xl overflow-hidden rounded-[28px]"
+                  className="vv-panel flex max-h-[calc(100vh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-[28px]"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="vv-divider flex items-center justify-between gap-3 border-b px-5 py-4">
+                  <div className="vv-divider shrink-0 border-b px-5 py-4">
+                    <div className="flex items-center justify-between gap-3">
                     <div className="text-sm font-semibold">照片</div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         className="vv-btn-danger inline-flex h-9 items-center justify-center rounded-full px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
@@ -1960,14 +1961,16 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                         关闭
                       </button>
                     </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-0 md:grid-cols-[1.2fr_0.8fr]">
-                    <div className="bg-black">
+                  <div className="max-h-[calc(100vh-7.5rem)] overflow-auto">
+                    <div className="grid grid-cols-1 gap-0 md:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                    <div className="flex items-center justify-center bg-black p-3 md:p-4">
                       <img
                         src={getPhotoSrc(photo)}
                         alt={photo.caption?.trim() ? photo.caption : "photo"}
-                        className="h-full w-full object-contain"
+                        className="max-h-[52vh] w-full object-contain md:max-h-[70vh]"
                       />
                     </div>
                     <div className="flex flex-col gap-4 p-5">
@@ -2005,15 +2008,16 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                             })
                           }
                           className="vv-input min-h-32 w-full resize-none rounded-2xl p-4 text-sm leading-6 outline-none"
-                          placeholder="一句话备注：比如酒店名称、票价、集合点、当天亮点…"
+                          placeholder="写一句备注，比如酒店名称、票价、集合点或当天亮点…"
                           aria-label="Photo caption"
                           readOnly={readOnly}
                         />
                       </div>
 
                       <div className="vv-muted text-xs leading-6">
-                        上传的照片会先压缩到 2048，再写入 Cloudflare R2；删除时会同步删除云端对象。
+                        上传时会自动压缩到 2048。
                       </div>
+                    </div>
                     </div>
                   </div>
                 </div>
