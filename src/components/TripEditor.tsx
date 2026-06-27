@@ -18,6 +18,7 @@ import {
   saveTripToCloud,
   uploadPhotoToCloud,
 } from "@/lib/cloud";
+import { hasReferenceDoc } from "@/lib/reference-docs";
 
 const toolbarGhostClass =
   "vv-toolbar-btn vv-toolbar-btn-ghost inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
@@ -989,6 +990,30 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               </ToolbarIcon>
               一页展示
             </button>
+
+            {hasReferenceDoc(plan.slug) ? (
+              <Link
+                href={`/trips/${plan.slug}/reference/`}
+                className={toolbarGhostClass}
+              >
+                <ToolbarIcon>
+                  <path
+                    d="M6 4.5h8.5L14 6.5v9.2A1.8 1.8 0 0 1 12.2 17.5H6.8A1.8 1.8 0 0 1 5 15.7V6.3A1.8 1.8 0 0 1 6.8 4.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M8 4.5v2.5h4V4.5M8.5 11.5h3M8.5 14h3"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </ToolbarIcon>
+                完整计划
+              </Link>
+            ) : null}
             {!readOnly ? (
                 <>
                   <button

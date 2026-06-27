@@ -306,6 +306,219 @@ body {
     background: var(--vv-surface-low);
     box-shadow: 0 6px 18px color-mix(in srgb, #000000 10%, transparent);
   }
+
+  .vv-reference-page {
+    position: relative;
+    overflow-x: clip;
+  }
+
+  .vv-reference-doc {
+    --vv-markdown-accent: var(--vv-accent-2);
+    --vv-markdown-accent-soft: color-mix(
+      in srgb,
+      var(--vv-accent-2) 12%,
+      var(--vv-surface-lowest)
+    );
+  }
+
+  .vv-markdown {
+    color: var(--foreground);
+    font-size: 0.975rem;
+    line-height: 1.8;
+  }
+
+  .vv-markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .vv-markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .vv-markdown p {
+    margin: 0.85rem 0;
+  }
+
+  .vv-markdown ul,
+  .vv-markdown ol {
+    margin: 0.85rem 0;
+    padding-left: 1.35rem;
+  }
+
+  .vv-markdown li {
+    margin: 0.35rem 0;
+  }
+
+  .vv-markdown li::marker {
+    color: color-mix(in srgb, var(--vv-markdown-accent) 72%, var(--foreground));
+  }
+
+  .vv-markdown-h2,
+  .vv-markdown h2 {
+    margin: 2.75rem 0 1.25rem;
+    padding: 0.9rem 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--vv-markdown-accent) 22%, var(--vv-outline-variant));
+    border-radius: 18px;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vv-markdown-accent) 10%, var(--vv-surface-lowest)),
+      color-mix(in srgb, var(--vv-surface-low) 88%, var(--vv-surface-lowest))
+    );
+    font-size: 1.45rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.35;
+    scroll-margin-top: 1.5rem;
+  }
+
+  .vv-markdown-h2:first-child,
+  .vv-markdown > h2:first-child {
+    margin-top: 0;
+  }
+
+  .vv-markdown-h3,
+  .vv-markdown h3 {
+    margin: 1.75rem 0 0.85rem;
+    padding: 0.65rem 0.95rem;
+    border-left: 4px solid var(--vv-markdown-accent);
+    border-radius: 0 14px 14px 0;
+    background: color-mix(in srgb, var(--vv-markdown-accent-soft) 88%, transparent);
+    font-size: 1.08rem;
+    font-weight: 650;
+    line-height: 1.45;
+    scroll-margin-top: 1.5rem;
+  }
+
+  .vv-markdown-h4,
+  .vv-markdown h4 {
+    margin: 1.35rem 0 0.55rem;
+    font-size: 0.98rem;
+    font-weight: 650;
+    color: color-mix(in srgb, var(--vv-markdown-accent) 70%, var(--foreground));
+  }
+
+  .vv-markdown-callout,
+  .vv-markdown blockquote {
+    margin: 1.1rem 0;
+    padding: 0.9rem 1rem 0.9rem 1.1rem;
+    border: 1px solid color-mix(in srgb, var(--vv-markdown-accent) 18%, var(--vv-outline-variant));
+    border-left: 4px solid var(--vv-markdown-accent);
+    border-radius: 0 16px 16px 0;
+    background: color-mix(in srgb, var(--vv-markdown-accent-soft) 92%, transparent);
+    color: var(--vv-on-surface-variant);
+  }
+
+  .vv-markdown-callout p,
+  .vv-markdown blockquote p {
+    margin: 0;
+  }
+
+  .vv-markdown-divider,
+  .vv-markdown hr {
+    margin: 2.25rem 0;
+    border: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--vv-outline-variant),
+      transparent
+    );
+  }
+
+  .vv-markdown-link,
+  .vv-markdown a {
+    color: color-mix(in srgb, var(--vv-markdown-accent) 88%, var(--foreground));
+    font-weight: 550;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--vv-markdown-accent) 35%, transparent);
+    text-underline-offset: 0.18em;
+  }
+
+  .vv-markdown-link:hover,
+  .vv-markdown a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .vv-markdown-code,
+  .vv-markdown code {
+    padding: 0.15rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--vv-outline-variant) 70%, transparent);
+    border-radius: 0.45rem;
+    background: var(--vv-surface-low);
+    font-family: var(--font-mono);
+    font-size: 0.84em;
+  }
+
+  .vv-markdown-table-wrap {
+    margin: 1.15rem 0 1.65rem;
+    overflow-x: auto;
+    border: 1px solid var(--vv-outline-variant);
+    border-radius: 18px;
+    background: color-mix(in srgb, var(--vv-surface-lowest) 94%, var(--vv-surface-low));
+    box-shadow:
+      0 10px 28px color-mix(in srgb, #000000 8%, transparent),
+      inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .vv-markdown-table-wrap table {
+    width: 100%;
+    min-width: 560px;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .vv-markdown-table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--vv-markdown-accent) 24%, var(--vv-outline-variant));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--vv-markdown-accent) 14%, var(--vv-surface-low)),
+      color-mix(in srgb, var(--vv-surface-low) 92%, var(--vv-surface-lowest))
+    );
+    color: color-mix(in srgb, var(--vv-markdown-accent) 72%, var(--foreground));
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-align: left;
+    text-transform: uppercase;
+    vertical-align: top;
+    white-space: nowrap;
+  }
+
+  .vv-markdown-table-wrap tbody td {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--vv-outline-variant) 72%, transparent);
+    vertical-align: top;
+  }
+
+  .vv-markdown-table-wrap tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .vv-markdown-table-wrap tbody tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--vv-surface-low) 52%, transparent);
+  }
+
+  .vv-markdown-table-wrap tbody tr:hover td {
+    background: color-mix(in srgb, var(--vv-markdown-accent) 7%, var(--vv-surface-low));
+  }
+
+  .vv-markdown-table-wrap tbody td:first-child {
+    font-weight: 600;
+    color: color-mix(in srgb, var(--vv-markdown-accent) 68%, var(--foreground));
+    white-space: nowrap;
+  }
+
+  .vv-markdown strong {
+    font-weight: 650;
+    color: color-mix(in srgb, var(--foreground) 92%, var(--vv-markdown-accent));
+  }
 }
 
 @media print {
