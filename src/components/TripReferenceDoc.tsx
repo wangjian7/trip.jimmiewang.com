@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { ReferenceDocLayout } from "@/components/ReferenceDocLayout";
+import type { TocItem } from "@/lib/markdown-toc";
 
 const toolbarGhostClass =
   "vv-toolbar-btn vv-toolbar-btn-ghost inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm";
@@ -14,11 +16,13 @@ export function TripReferenceDoc({
   title,
   subtitle,
   content,
+  toc,
 }: {
   slug: string;
   title: string;
   subtitle?: string;
   content: string;
+  toc: TocItem[];
 }) {
   const theme = getReferenceTheme(slug);
 
@@ -26,8 +30,8 @@ export function TripReferenceDoc({
     <div className="vv-reference-page flex-1 bg-[color:var(--background)] text-[color:var(--foreground)]">
       <div className="vv-reference-hero pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_20%_20%,rgba(0,112,235,0.12),transparent_55%),radial-gradient(circle_at_80%_10%,rgba(172,99,0,0.14),transparent_50%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(90,167,255,0.12),transparent_55%),radial-gradient(circle_at_80%_10%,rgba(255,184,116,0.1),transparent_50%)]" />
 
-      <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10 sm:px-6">
-        <header className="flex flex-col gap-4">
+      <div className="relative mx-auto w-full max-w-7xl px-4 py-10 sm:px-6">
+        <header className="mb-8 flex flex-col gap-4">
           <div className="flex flex-wrap gap-3">
             <Link href={`/trips/${slug}/`} className={toolbarGhostClass}>
               <span
@@ -75,24 +79,28 @@ export function TripReferenceDoc({
           </div>
         </header>
 
-        <article
-          className="vv-markdown vv-panel vv-reference-doc rounded-[28px] p-6 sm:p-10"
-          data-vv-theme={theme}
-        >
-          <MarkdownContent content={content} />
-        </article>
+        <ReferenceDocLayout toc={toc}>
+          <div className="flex flex-col gap-8">
+            <article
+              className="vv-markdown vv-panel vv-reference-doc rounded-[28px] p-6 sm:p-10"
+              data-vv-theme={theme}
+            >
+              <MarkdownContent content={content} />
+            </article>
 
-        <footer className="vv-muted pb-4 text-xs leading-6">
-          Powered by{" "}
-          <a
-            className="vv-link font-medium"
-            href="https://jimmiewang.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            jimmiewang.com
-          </a>
-        </footer>
+            <footer className="vv-muted pb-4 text-xs leading-6">
+              Powered by{" "}
+              <a
+                className="vv-link font-medium"
+                href="https://jimmiewang.com"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                jimmiewang.com
+              </a>
+            </footer>
+          </div>
+        </ReferenceDocLayout>
       </div>
     </div>
   );

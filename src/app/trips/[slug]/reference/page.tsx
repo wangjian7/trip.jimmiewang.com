@@ -26,6 +26,7 @@ export default async function TripReferencePage({
       title={doc.title}
       subtitle={doc.subtitle}
       content={doc.content}
+      toc={doc.toc}
     />
   );
 }

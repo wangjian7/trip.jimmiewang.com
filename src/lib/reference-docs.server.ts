@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { prepareReferenceMarkdown } from "@/lib/markdown-toc";
 import { REFERENCE_DOCS } from "@/lib/reference-docs";
 
 export function getReferenceDocContent(slug: string) {
@@ -10,14 +11,16 @@ export function getReferenceDocContent(slug: string) {
   const raw = fs.readFileSync(filePath, "utf-8");
   const titleMatch = raw.match(/^#\s+(.+)$/m);
   const subtitleMatch = raw.match(/^>\s+(.+)$/m);
-  const content = raw
+  const stripped = raw
     .replace(/^#\s[^\n]+\n+/, "")
     .replace(/^>\s[^\n]+\n+/, "")
     .replace(/^---\n+/, "");
+  const { body, toc } = prepareReferenceMarkdown(stripped);
 
   return {
     title: titleMatch?.[1] ?? "参考文档",
     subtitle: subtitleMatch?.[1],
-    content,
+    content: body,
+    toc,
   };
 }

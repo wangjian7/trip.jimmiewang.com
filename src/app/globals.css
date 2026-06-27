@@ -309,7 +309,7 @@ body {
 
   .vv-reference-page {
     position: relative;
-    overflow-x: clip;
+    scroll-behavior: smooth;
   }
 
   .vv-reference-doc {
@@ -368,7 +368,7 @@ body {
     font-weight: 650;
     letter-spacing: -0.02em;
     line-height: 1.35;
-    scroll-margin-top: 1.5rem;
+    scroll-margin-top: 6rem;
   }
 
   .vv-markdown-h2:first-child,
@@ -518,6 +518,37 @@ body {
   .vv-markdown strong {
     font-weight: 650;
     color: color-mix(in srgb, var(--foreground) 92%, var(--vv-markdown-accent));
+  }
+
+  .vv-reference-toc-mobile {
+    border-color: color-mix(in srgb, var(--vv-outline-variant) 72%, transparent);
+    background: color-mix(in srgb, var(--background) 82%, transparent);
+  }
+
+  .vv-reference-toc-panel {
+    border: 1px solid var(--vv-outline-variant);
+    background: color-mix(in srgb, var(--vv-surface-lowest) 92%, var(--vv-surface-low));
+    box-shadow: 0 12px 32px color-mix(in srgb, #000000 8%, transparent);
+  }
+
+  .vv-reference-toc-link-idle {
+    color: var(--vv-on-surface-variant);
+  }
+
+  .vv-reference-toc-link-idle:hover {
+    background: color-mix(in srgb, var(--vv-accent-2) 8%, var(--vv-surface-low));
+    color: var(--foreground);
+  }
+
+  .vv-reference-toc-link-active {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vv-accent) 14%, var(--vv-surface-lowest)),
+      color-mix(in srgb, var(--vv-accent-2) 12%, var(--vv-surface-lowest))
+    );
+    color: color-mix(in srgb, var(--vv-accent-2) 82%, var(--foreground));
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vv-accent-2) 18%, transparent);
   }
 }
 
