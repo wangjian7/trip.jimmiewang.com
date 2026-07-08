@@ -32,6 +32,30 @@ export default function Home() {
           </p>
         </header>
 
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/flights/"
+            data-vv-card-theme="sky"
+            className="vv-card vv-home-card group rounded-[24px] p-6 transition hover:-translate-y-0.5 hover:shadow-2xl"
+          >
+            <div className="flex flex-col gap-2">
+              <div className="vv-kicker text-xs font-medium tracking-wider">
+                Flight Tracking
+              </div>
+              <div className="text-lg font-semibold leading-7">
+                航班关注看板
+              </div>
+              <div className="vv-muted text-sm">
+                长期盯几条航线，观察价格变化
+              </div>
+              <div className="vv-link mt-2 inline-flex items-center gap-2 text-sm font-medium">
+                打开看板
+                <span aria-hidden>→</span>
+              </div>
+            </div>
+          </Link>
+        </section>
+
         <main className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sortedTrips.map((trip) => (
             <Link

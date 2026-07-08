@@ -231,6 +231,15 @@ body {
     );
   }
 
+  .vv-home-card[data-vv-card-theme="sky"] {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--vv-ocean) 20%, var(--vv-surface-lowest)),
+      color-mix(in srgb, var(--vv-primary) 12%, var(--vv-surface-lowest)),
+      var(--vv-surface-lowest)
+    );
+  }
+
   .vv-empty {
     border: 1px dashed var(--vv-outline);
     color: var(--vv-on-surface-variant);

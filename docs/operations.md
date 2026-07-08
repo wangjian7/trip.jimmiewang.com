@@ -120,3 +120,83 @@
     - 打开 Pages 项目 Settings → Functions → Bindings。
     - 在 Production 环境新增 `BUCKET` → `trip-photos`。
     - 保存后重新触发部署，再次测试上传。
+
+### 本地开发：航班关注看板（Flight Tracking Board）
+- 场景:
+  - 本地开发 `/flights/` 关注列表、添加关注、详情页；数据读写本地 D1。
+  - 前端需要 Next.js 热更新，API 需要 Pages Functions + D1，两者分开启动。
+- 前置条件:
+  - 已在项目根目录 `trip.jimmiewang.com/` 执行过 `npm install`。
+  - `wrangler.toml` 已配置 D1 binding `DB`。
+  - 本地 D1 已执行基础迁移与航班表迁移：
+    - `npm run d1:migrate:local`（trips 表）
+    - `npm run d1:migrate:local:flights`（flight_watches / flight_scrape_runs / flight_quotes）
+- 执行步骤:
+  - **推荐：两个终端分别控制前后端**
+    - 终端 1（前端）：
+      ```bash
+      cd trip.jimmiewang.com
+      npm run dev
+      ```
+      - 访问 http://localhost:3000/
+      - 航班看板入口：http://localhost:3000/flights/
+    - 终端 2（D1 API + 本地抓取服务）：
+      ```bash
+      cd trip.jimmiewang.com
+      npm run dev:api
+      ```
+      - D1 API 监听 http://127.0.0.1:8788
+      - 本地 scrape 服务监听 http://127.0.0.1:8789（Playwright 试抓）
+      - 开发模式下 Next.js 会把 `/api/*` 代理到 8788；`/api/flights/:id/scrape/` 代理到 8789
+  - **首次试抓前安装 Playwright 浏览器**
+    ```bash
+    npm run scrape:install
+    ```
+  - **命令行试抓（不经过页面按钮）**
+    ```bash
+    npm run scrape:local -- --watch-id fw-sha-bne-20260930
+    ```
+    - 可选 `--headed` 打开有头浏览器便于调试。
+  - **页面试抓**
+    - 打开某条关注详情页，点击 **「试抓一次」**。
+    - 抓取结果写入 `flight_scrape_runs` + `flight_quotes`，页面自动刷新价格。
+  - **可选：一条命令同时启动**
+    ```bash
+    npm run dev:local
+    ```
+    - 等价于 concurrently 跑 `dev:api` + `dev`，适合不想开两个终端时使用。
+  - **改代码后如何重启**
+    - 只改 `src/` 前端：重启终端 1 即可（多数情况热更新自动生效）。
+    - 只改 `functions/` 或 D1 迁移：重启终端 2。
+    - 改了 `next.config.ts`：必须重启终端 1。
+- 验证方式:
+  - API 直连：
+    ```bash
+    curl http://127.0.0.1:8788/api/flights/
+    ```
+    - 应返回 JSON：`{"watches":[...]}`（空数组也正常）。
+  - 经 Next 代理（前端实际走的路径）：
+    ```bash
+    curl http://localhost:3000/api/flights/
+    ```
+    - 同样应返回 200 与 JSON。
+  - 浏览器打开 http://localhost:3000/flights/ ，应能看到关注列表或空状态，不应出现「暂时无法加载关注列表」。
+  - 添加关注：http://localhost:3000/flights/new/ ，保存后跳转到详情页。
+  - 试抓一次：
+    ```bash
+    curl -X POST http://localhost:3000/api/flights/fw-sha-bne-20260930/scrape/
+    ```
+    - 或在详情页点「试抓一次」。
+- 踩坑记录:
+  - **只跑 `npm run dev` 不够**：没有 D1 API，页面会报「暂时无法加载关注列表」。
+  - **8788 端口被占用**：重复执行 `npm run dev:api` 会报 `Address already in use`。
+    - 查占用：`lsof -i :8788`
+    - 释放端口：`lsof -ti :8788 | xargs kill`
+    - 再重新 `npm run dev:api`
+  - **trailing slash**：站点配置了 `trailingSlash: true`，API 请求路径应使用 `/api/flights/`（带末尾斜杠），避免 308 重定向影响 POST/PATCH。
+  - **本地 D1 数据位置**：`.wrangler/state/v3/d1/` 下 SQLite 文件；`npm run dev` 单独运行不会读写该库。
+  - **首次使用航班表**：若 API 报 `no such table: flight_watches`，补跑 `npm run d1:migrate:local:flights`。
+  - **试抓按钮无响应 / 报 scrape 服务未启动**：确认终端 2 的 `npm run dev:api` 在跑（内含 8789 scrape 服务）。
+  - **Playwright 报错**：先执行 `npm run scrape:install` 安装 Chromium。
+  - **同一天同半天重复试抓**：会跳过重复写入（`flight_scrape_runs` UNIQUE 约束）；需强制重抓时可手动删当天对应 run 记录。
+  - 表结构与字段说明见 `docs/表结构设计.md`；架构决策见 `docs/decisions.md` 0003 / 0004。

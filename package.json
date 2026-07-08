@@ -4,12 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:api": "npx concurrently -k -n api,scrape -c blue,magenta \"npx wrangler pages dev out --local --persist-to=./.wrangler/state --port 8788\" \"node scripts/scrape-server.mjs\"",
+    "scrape:local": "node scripts/scrape_ceair_local.mjs",
+    "scrape:install": "npx playwright install chromium",
+    "dev:local": "npx concurrently -k -n api,web -c blue,green \"npm run dev:api\" \"npm run dev\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "wrangler": "wrangler",
     "d1:migrate:remote": "wrangler d1 execute DB --remote --file=./migrations/0001_init.sql",
-    "d1:migrate:local": "wrangler d1 execute DB --local --persist-to=./.wrangler/state --file=./migrations/0001_init.sql"
+    "d1:migrate:local": "wrangler d1 execute DB --local --persist-to=./.wrangler/state --file=./migrations/0001_init.sql",
+    "d1:migrate:local:flights": "wrangler d1 execute DB --local --persist-to=./.wrangler/state --file=./migrations/0002_flight_prices.sql"
   },
   "dependencies": {
     "next": "16.2.6",
@@ -23,8 +28,10 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.92.0"
