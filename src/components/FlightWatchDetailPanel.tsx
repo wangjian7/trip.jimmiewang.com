@@ -14,6 +14,7 @@ import {
   type FlightWatchDetail,
 } from "@/lib/flight-watches";
 import { FlightPriceTrend } from "@/components/FlightPriceTrend";
+import { scrapeEnabled } from "@/lib/env";
 
 export function FlightWatchDetailPanel() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export function FlightWatchDetailPanel() {
   const [deleting, setDeleting] = useState(false);
   const [scraping, setScraping] = useState(false);
   const [scrapeMessage, setScrapeMessage] = useState<string | null>(null);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
   const [trendRefreshKey, setTrendRefreshKey] = useState(0);
 
   async function reloadDetail(id: string) {
@@ -72,14 +74,14 @@ export function FlightWatchDetailPanel() {
 
     setScraping(true);
     setScrapeMessage(null);
-    setError(null);
+    setScrapeError(null);
     try {
       const result = await scrapeFlightWatch(watchId);
       setScrapeMessage(result.message);
       await reloadDetail(watchId);
       setTrendRefreshKey((value) => value + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "试抓失败");
+      setScrapeError(err instanceof Error ? err.message : "试抓失败");
     } finally {
       setScraping(false);
     }
@@ -169,6 +171,9 @@ export function FlightWatchDetailPanel() {
           {scrapeMessage ? (
             <p className="vv-muted mt-2 text-sm">{scrapeMessage}</p>
           ) : null}
+          {scrapeError ? (
+            <p className="mt-2 text-sm text-[color:var(--vv-error)]">{scrapeError}</p>
+          ) : null}
         </div>
 
         <div className="vv-card rounded-[24px] border vv-border p-6">
@@ -217,15 +222,21 @@ export function FlightWatchDetailPanel() {
         ) : null}
       </section>
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={scraping}
-          onClick={() => void onScrape()}
-          className="vv-btn-primary rounded-xl px-5 py-3 text-sm font-medium disabled:opacity-60"
-        >
-          {scraping ? "抓取中…" : "试抓一次"}
-        </button>
+      <div className="flex flex-wrap items-center gap-3">
+        {scrapeEnabled ? (
+          <button
+            type="button"
+            disabled={scraping}
+            onClick={() => void onScrape()}
+            className="vv-btn-primary rounded-xl px-5 py-3 text-sm font-medium disabled:opacity-60"
+          >
+            {scraping ? "抓取中…" : "试抓一次"}
+          </button>
+        ) : (
+          <p className="vv-muted text-sm">
+            线上暂不支持手动试抓；Cron Worker 接入后将每天自动更新价格。
+          </p>
+        )}
         <button
           type="button"
           disabled={deleting}

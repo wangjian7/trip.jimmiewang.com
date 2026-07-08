@@ -200,3 +200,145 @@
   - **Playwright 报错**：先执行 `npm run scrape:install` 安装 Chromium。
   - **同一天同半天重复试抓**：会跳过重复写入（`flight_scrape_runs` UNIQUE 约束）；需强制重抓时可手动删当天对应 run 记录。
   - 表结构与字段说明见 `docs/表结构设计.md`；架构决策见 `docs/decisions.md` 0003 / 0004。
+
+### trip.jimmiewang.com：将 D1 表结构变更部署到 Cloudflare（远端）
+- 场景:
+  - 新增或修改 `migrations/*.sql` 后，需要把表结构同步到线上 D1（`trip-jimmiewang-com`），否则 Pages Functions API 会报 `no such table`。
+- 前置条件:
+  - 已登录 Cloudflare：`npx wrangler login`；用 `npx wrangler whoami` 确认当前账号。
+  - `wrangler.toml` 中 D1 配置正确（binding `DB`，database_name `trip-jimmiewang-com`）。
+  - 迁移 SQL 已在本地验证：
+    - `npm run d1:migrate:local`（trips 表）
+    - `npm run d1:migrate:local:flights`（航班三表，如有）
+- 执行步骤:
+  - 进入项目目录：
+    ```bash
+    cd trip.jimmiewang.com
+    ```
+  - 按 migrations 编号顺序，对**远端**依次执行尚未跑过的新文件（只跑增量，不要重复跑已确认生效的变更）：
+    - 基础 trips 表（0001）：
+      ```bash
+      npm run d1:migrate:remote
+      ```
+      - 等价于 `npx wrangler d1 execute DB --remote --file=./migrations/0001_init.sql`
+    - 航班三表（0002）：
+      ```bash
+      npx wrangler d1 execute DB --remote --file=./migrations/0002_flight_prices.sql
+      ```
+  - 说明：
+    - 命令里的 `DB` 是 `wrangler.toml` 的 binding 名，wrangler 会解析到远端数据库。
+    - 也可直接用数据库名：`npx wrangler d1 execute trip-jimmiewang-com --remote --file=...`
+    - 当前 SQL 使用 `CREATE TABLE IF NOT EXISTS`，重复执行建表语句通常安全；若迁移含 `ALTER` / 数据回填，需人工确认是否幂等。
+  - **（可选）部署前备份远端 D1**：
+    ```bash
+    npx wrangler d1 export trip-jimmiewang-com --remote --output backup-$(date +%F).sql
+    ```
+- 验证方式:
+  - 列出远端表：
+    ```bash
+    npx wrangler d1 execute trip-jimmiewang-com --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+    ```
+    - 应包含 `trips`；若已跑 0002，还应包含 `flight_watches`、`flight_scrape_runs`、`flight_quotes`。
+  - 生产 API 抽查：
+    ```bash
+    curl https://trip.jimmiewang.com/api/flights/
+    ```
+    - 应返回 JSON，不应出现 `no such table: flight_watches` 等错误。
+- 踩坑记录:
+  - **本地迁移 ≠ 远端迁移**：`d1:migrate:local*` 只写 `.wrangler/state/`，不会自动同步到 Cloudflare。
+  - **Pages D1 binding 与迁移是两件事**：远端已有表后，Pages 项目 Production 仍须绑定 `DB` → `trip-jimmiewang-com`（见上文「部署到 Cloudflare Pages」章节）。
+  - **`package.json` 目前只有 `d1:migrate:remote`（0001）**：0002 需手动执行上述 wrangler 命令，或自行补充 npm script。
+  - **不要对生产跑破坏性 SQL**（`DROP` / `TRUNCATE`）除非已备份并确认影响范围。
+
+### trip.jimmiewang.com：启用 Cloudflare Cron Worker（航班定时抓取）
+- 场景:
+  - 每天北京时间 09:00 / 15:00 自动抓取东航官网价格并写入 D1（见 `docs/decisions.md` 0004）。
+  - **Pages Functions 不支持 Cron Triggers**；需单独部署一个 **Worker**（与 Pages 项目并列，共用同一 D1）。
+- 前置条件:
+  - 远端 D1 已存在航班三表（见上一节 0002 迁移）。
+  - Cloudflare 账号已开通 **Browser Rendering**（Dashboard → Workers & Pages → Browser Rendering → Enable）。
+  - 已有抓取 Worker 代码（计划独立目录，如 `workers/flight-scraper/`，实现 `scheduled()` + Browser Rendering + 写入 D1）。
+- 执行步骤:
+  - **1. 配置 Worker 的 `wrangler.toml`**（与 Pages 根目录的 `wrangler.toml` 分开；示例）：
+    ```toml
+    name = "trip-flight-scraper"
+    main = "src/index.ts"
+    compatibility_date = "2026-05-16"
+    compatibility_flags = ["nodejs_compat"]
+
+    [[d1_databases]]
+    binding = "DB"
+    database_name = "trip-jimmiewang-com"
+    database_id = "4d74b296-dff6-44cd-90c7-17dcb02ef6d4"
+
+    [browser]
+    binding = "BROWSER"
+
+    [triggers]
+    crons = ["0 1 * * *", "0 7 * * *"]  # UTC → 北京 09:00 / 15:00
+    ```
+  - **2. 实现 `scheduled` 处理器**
+    - Worker 入口导出 `scheduled(event, env, ctx)`，在 handler 内启动 Browser Rendering 打开东航结果页、解析 DOM、写入 D1。
+    - 解析逻辑可参考 `scripts/lib/ceair-scraper.mjs`，但线上须改用 `@cloudflare/puppeteer` 或 `@cloudflare/playwright`（标准 Playwright 不能在 Worker 内运行）。
+    - 依赖：`npm install @cloudflare/puppeteer`（或 `@cloudflare/playwright`）。
+  - **3. 本地调试 Cron**（Browser Rendering 必须 `--remote`）：
+    ```bash
+    cd workers/flight-scraper   # 按实际路径
+    npx wrangler dev --remote --test-scheduled
+    ```
+    - 浏览器访问 `http://localhost:8787/__scheduled?cron=0+1+*+*+*` 可手动触发一次 scheduled。
+  - **4. 部署 Worker**：
+    ```bash
+    npx wrangler deploy
+    ```
+    - 部署后 wrangler 会把 `triggers.crons` 注册到该 Worker；全球生效最多约 **15 分钟**。
+  - **5. 控制台确认 Cron 已启用**：
+    - Cloudflare Dashboard → **Workers & Pages** → 选择 `trip-flight-scraper`。
+    - 打开 **Triggers** 页，应看到两条 cron：`0 1 * * *`、`0 7 * * *`。
+    - 若部署后未出现，检查 `wrangler.toml` 是否含 `[triggers]`，并重新 `wrangler deploy`（不要用空 `crons: []` 误覆盖）。
+  - **6. 观察运行日志与数据**：
+    ```bash
+    npx wrangler tail trip-flight-scraper
+    ```
+    - 触发后检查 D1：
+      ```bash
+      npx wrangler d1 execute trip-jimmiewang-com --remote --command "SELECT scrape_date, slot, status FROM flight_scrape_runs ORDER BY scrape_date DESC LIMIT 5;"
+      ```
+- 验证方式:
+  - Dashboard Triggers 页显示两条 cron 且状态正常。
+  - `wrangler tail` 在触发时段能看到 scheduled 执行日志，无未捕获异常。
+  - D1 中 `flight_scrape_runs` / `flight_quotes` 按预期新增记录。
+  - 详情页 `https://trip.jimmiewang.com/flights/detail/?id=...` 价格曲线有更新（无需点「试抓一次」）。
+- 踩坑记录:
+  - **Cron 表达式均为 UTC**：北京 09:00 = UTC 01:00，北京 15:00 = UTC 07:00；勿按本地时区直接写 cron。
+  - **Browser Rendering 不支持本地模拟**：`wrangler dev` 必须加 `--remote`，否则 `BROWSER` binding 不可用。
+  - **Pages 与 Worker 分离**：Cron 绑在 Worker 上，不会随 Pages 静态站点部署自动启用；需单独 `wrangler deploy`。
+  - **东航可能对 CF 数据中心 IP 拦截**：若 scheduled 运行成功但页面无数据，见 `docs/decisions.md` 0004 备选方案（GitHub Actions + Playwright）。
+  - **停用 Cron**：在 `wrangler.toml` 设 `crons = []` 并 `wrangler deploy`，或在 Dashboard Triggers 页删除 schedule。
+  - **当前状态**：Cron Worker 代码尚未合入仓库；本地「试抓一次」仍依赖 `npm run dev:api` 的 8789 scrape 服务，线上不可用。
+
+### trip.jimmiewang.com：Cloudflare Pages 前端环境变量（NEXT_PUBLIC_*）
+- 场景:
+  - 生产构建需注入 `NEXT_PUBLIC_APP_ENV`、`NEXT_PUBLIC_SCRAPE_ENABLED` 等，与本地 `.env.development` 对齐（见 `docs/decisions.md` 0005）。
+- 前置条件:
+  - Pages 项目已连接 GitHub 仓库，Root directory 为 `trip.jimmiewang.com`。
+  - 变量名必须以 `NEXT_PUBLIC_` 开头，才能在 Static Export 的客户端代码中读取。
+- 执行步骤:
+  - 打开 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages** → 选择 trip 项目。
+  - 进入 **Settings** → **Environment variables**。
+  - 切换到 **Production** 标签（若界面有 Production / Preview 切换）。
+  - 点击 **Add variables**，添加：
+    | Variable name | Value |
+    |---------------|-------|
+    | `NEXT_PUBLIC_APP_ENV` | `production` |
+    | `NEXT_PUBLIC_SCRAPE_ENABLED` | `false` |
+  - 保存后进入 **Deployments**，对最新 Production 部署点 **Retry deployment**（或 push 新 commit 触发构建）。
+  - **Preview 环境**（可选）：在 Preview 标签同样添加上述变量，或设 `NEXT_PUBLIC_APP_ENV=preview` 便于区分。
+- 验证方式:
+  - 重新部署完成后，打开生产详情页 `/flights/detail/?id=...`：
+    - 不应再出现「试抓一次」按钮，应显示「线上暂不支持手动试抓…」提示。
+  - 本地 `npm run dev` 仍应显示「试抓一次」（`.env.development` 中 `SCRAPE_ENABLED=true`）。
+- 踩坑记录:
+  - **`NEXT_PUBLIC_*` 只在 build 时生效**：改 Dashboard 变量后必须重新构建，刷新浏览器不够。
+  - **Functions 运行时变量与前端 build 变量无关**：Pages Settings 里给 Functions 配的 binding/secret 不会自动变成 `NEXT_PUBLIC_*`。
+  - **未设置时默认值**：代码中 `APP_ENV` 默认 `production`，`SCRAPE_ENABLED` 默认 `false`（未设即关闭试抓）。

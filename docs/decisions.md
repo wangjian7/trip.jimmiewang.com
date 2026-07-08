@@ -91,3 +91,26 @@
   - 本地 Mac launchd 定时：环境最接近真实用户，但依赖开机，放弃作为主方案。
   - 国内轻量云主机跑 cron：最稳但需付费，仅在前两者都不可行时考虑。
 
+### 0005. 前端环境标识与功能开关（NEXT_PUBLIC_* 区分 dev / production 能力）
+- 日期: 2026-07-08
+- 状态: accepted
+- 背景:
+  - 本地开发与 Cloudflare Pages 生产的能力集不同：本地有 Playwright scrape 服务（8789）与 wrangler 本地 D1；生产有 Pages Functions + 远端 D1，但尚无 scrape / Cron Worker。
+  - 若不区分环境，生产详情页仍展示「试抓一次」，用户点击后返回 405，体验易误解为站点故障。
+  - Next.js 采用 Static Export，客户端可读的环境变量必须在 `next build` 时通过 `NEXT_PUBLIC_*` 注入。
+- 决策:
+  - 引入两层前端环境配置（见 `src/lib/env.ts`、`.env.example`）：
+    - `NEXT_PUBLIC_APP_ENV`：`development` | `production`，标识运行环境。
+    - `NEXT_PUBLIC_SCRAPE_ENABLED`：是否展示本地 Playwright「试抓一次」入口（`true` 仅本地 dev）。
+  - 本地：`npm run dev` 自动加载 `.env.development`（`APP_ENV=development`，`SCRAPE_ENABLED=true`）。
+  - 生产：在 Cloudflare Pages **Build environment variables → Production** 设置 `NEXT_PUBLIC_APP_ENV=production`，不设或设 `NEXT_PUBLIC_SCRAPE_ENABLED=false`。
+  - UI 按功能开关显隐能力，而非硬编码 `NODE_ENV`（Preview 与 Production build 的 `NODE_ENV` 均为 `production`，无法区分）。
+- 影响:
+  - 生产不再误展示不可用的试抓按钮；本地开发行为不变。
+  - 新增能力（如 Cron 状态提示）可继续用 `NEXT_PUBLIC_*` 开关扩展，无需改构建架构。
+  - 变更 `NEXT_PUBLIC_*` 后须重新触发 Pages 构建才会生效（变量在 build 时 bake 进静态 JS）。
+- 备选方案:
+  - 仅用 `process.env.NODE_ENV === 'development'`：实现简单，但无法区分 Pages Preview / Production。
+  - 运行时 API 探测 scrape 端点：多一次请求且仍无法解决 UI 文案问题，不采用。
+  - 生产也部署 scrape Pages Function：Playwright 无法在 Pages 边缘运行，不可行。
+
