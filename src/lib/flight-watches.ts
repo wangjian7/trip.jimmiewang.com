@@ -80,6 +80,84 @@ function toUserFacingError(action: "list" | "get" | "create" | "update" | "delet
   return "删除关注失败。";
 }
 
+export type ScheduleSlotState =
+  | "disabled"
+  | "pending"
+  | "success"
+  | "failed"
+  | "running"
+  | "missed";
+
+export type FlightSchedulePayload = {
+  scheduler: {
+    name: string;
+    executor: string;
+    timezone: string;
+    slots: Array<{ slot: "am" | "pm"; localTime: string; label: string }>;
+    enabledWatchCount: number;
+  };
+  today: string;
+  now: string;
+  nextRun: {
+    slot: "am" | "pm";
+    localTime: string;
+    label: string;
+    scrapeDate: string;
+  };
+  watches: Array<
+    FlightWatch & {
+      schedule: {
+        am: {
+          state: ScheduleSlotState;
+          run: {
+            runId: string;
+            status: string;
+            minPriceCny: number | null;
+            observedAt: string | null;
+            errorMessage: string | null;
+            flightsFound: number;
+          } | null;
+        };
+        pm: {
+          state: ScheduleSlotState;
+          run: {
+            runId: string;
+            status: string;
+            minPriceCny: number | null;
+            observedAt: string | null;
+            errorMessage: string | null;
+            flightsFound: number;
+          } | null;
+        };
+      };
+    }
+  >;
+  recentRuns: Array<{
+    runId: string;
+    watchId: string;
+    label: string;
+    scrapeDate: string;
+    slot: string;
+    status: string;
+    minPriceCny: number | null;
+    observedAt: string | null;
+    errorMessage: string | null;
+    flightsFound: number;
+  }>;
+};
+
+export async function getFlightSchedule() {
+  const res = await fetch("/api/flights/schedule/", { method: "GET" });
+  if (!res.ok) {
+    const code = await readErrorCode(res);
+    if (code === "db_not_bound") {
+      throw new Error("本地 API 未连接 D1。请另开终端运行 npm run dev:api。");
+    }
+    throw new Error("暂时无法加载定时任务。");
+  }
+  return (await res.json()) as FlightSchedulePayload;
+}
+
 export async function listFlightWatches() {
   const res = await fetch("/api/flights/", { method: "GET" });
   if (!res.ok) {

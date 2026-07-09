@@ -284,13 +284,28 @@ chmod +x scripts/macmini/install-launchd.sh
 
 - 默认 **本地时间 09:00、15:00** 各跑一次（请把 Mac 系统时区设为 **亚洲/上海**）
 - 日志：`~/Library/Logs/trip-flight-scrape/scrape-*.log`
-- **手动触发一次**（不等定时）：
-  ```bash
-  ~/nextcloud/jimmiewang/trip.jimmiewang.com/scripts/macmini/run-scrape.sh
-  ```
 - 查看任务状态：
   ```bash
+  npm run macmini:schedule
+  # 或 JSON：npm run macmini:schedule:json
   launchctl print gui/$(id -u)/com.jimmiewang.trip-flight-scrape
+  ```
+- **暂停 / 恢复**定时（不删 plist，随时可恢复）：
+  ```bash
+  npm run macmini:schedule:pause    # launchctl disable
+  npm run macmini:schedule:resume   # launchctl enable（未加载时会自动 bootstrap）
+  ```
+- **本地管理面板**（仅 Mac Mini 本机 `127.0.0.1:8791`，可暂停/恢复/看日志）：
+  ```bash
+  npm run macmini:schedule:dashboard
+  # 浏览器打开 http://127.0.0.1:8791/
+  # 远程 SSH 端口转发：ssh -L 8791:127.0.0.1:8791 user@mac-mini
+  ```
+- 查看最近抓取日志：`npm run macmini:schedule:logs`
+- 手动触发一次（不等定时）：
+  ```bash
+  npm run macmini:schedule:run
+  # 或：~/trip.jimmiewang.com/scripts/macmini/run-scrape.sh
   ```
 - 卸载：
   ```bash
@@ -315,6 +330,9 @@ Mac Mini 上 `git pull`（或 Nextcloud 同步）后 **无需 reinstall launchd*
 |------|------|------|
 | `npm run scrape:local -- --watch-id=...` | 本地 D1 | 开发联调 |
 | `npm run scrape:remote -- --watch-id=...` | **远端 D1** | Mac Mini / 手工补抓 |
+| `npm run macmini:schedule` | Mac Mini | 查看 launchd 定时任务状态 |
+| `npm run macmini:schedule:pause` / `:resume` | Mac Mini | 暂停 / 恢复 launchd 定时 |
+| `npm run macmini:schedule:dashboard` | Mac Mini | 本地 Web 管理面板（8791） |
 | `npm run scrape:remote -- --all` | **远端 D1** | launchd 定时任务 |
 
 **5. Worker Cron 状态（2026-07-09 已停用）**

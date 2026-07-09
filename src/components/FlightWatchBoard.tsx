@@ -67,15 +67,23 @@ export function FlightWatchBoard() {
             Flight Tracking Board
           </h1>
           <p className="vv-muted max-w-2xl text-base leading-7">
-            长期关注的航线与价格观测。后台定时抓取尚未接入，当前可先添加关注并查看配置。
+            长期关注的航线与价格观测。Mac Mini 每天 09:00 / 15:00 自动抓取东航官网价格。
           </p>
         </div>
-        <Link
-          href="/flights/new/"
-          className="vv-btn-primary inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-medium"
-        >
-          添加关注
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/flights/schedule/"
+            className="vv-btn-secondary inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-medium"
+          >
+            定时任务
+          </Link>
+          <Link
+            href="/flights/new/"
+            className="vv-btn-primary inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-medium"
+          >
+            添加关注
+          </Link>
+        </div>
       </header>
 
       {loading ? (
