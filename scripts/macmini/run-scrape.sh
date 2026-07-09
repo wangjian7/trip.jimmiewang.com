@@ -1,8 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
 
-# Mac Mini 定时抓取入口。由 launchd 调用。
-REPO="${TRIP_REPO:-$HOME/nextcloud/jimmiewang/trip.jimmiewang.com}"
+# Mac Mini 定时抓取入口。由 launchd 或 schedule-admin 调用。
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO="${TRIP_REPO:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 LOG_DIR="${TRIP_SCRAPE_LOG_DIR:-$HOME/Library/Logs/trip-flight-scrape}"
 mkdir -p "$LOG_DIR"
 

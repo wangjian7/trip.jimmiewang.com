@@ -8,6 +8,7 @@ import {
   launchdTarget,
   logDir,
   plistPath,
+  repoRoot,
   runScriptPath,
   SCHEDULE_SLOTS,
 } from "./config.mjs";
@@ -218,6 +219,7 @@ export async function runLaunchdJobOnce() {
   const { stdout, stderr } = await execFileAsync("/bin/zsh", [script], {
     encoding: "utf8",
     maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, TRIP_REPO: repoRoot() },
   });
   return { stdout, stderr };
 }
