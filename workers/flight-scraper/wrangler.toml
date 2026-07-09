@@ -1,0 +1,19 @@
+name = "trip-flight-scraper"
+main = "src/index.ts"
+compatibility_date = "2026-05-16"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "trip-jimmiewang-com"
+database_id = "4d74b296-dff6-44cd-90c7-17dcb02ef6d4"
+remote = true
+
+[browser]
+binding = "BROWSER"
+remote = true
+
+# Cron 已停用（2026-07-09）：改由 Mac Mini launchd 抓取，见 docs/operations.md §1.7
+# 恢复时改回：crons = ["0 1 * * *", "0 7 * * *"]
+[triggers]
+crons = []
