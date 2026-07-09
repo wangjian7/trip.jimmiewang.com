@@ -89,7 +89,25 @@
 - 备选方案:
   - GitHub Actions 定时跑 Playwright + `wrangler d1 execute --remote` 写入：免费、不依赖本地，作为 CF IP 被拦时的首选备胎（代码基本可复用）。
   - 本地 Mac launchd 定时：环境最接近真实用户，但依赖开机，放弃作为主方案。
+  - **2026-07-09 起**：生产抓取改 **Mac Mini launchd + `scrape:remote`**；Worker Cron 停用，代码保留。
   - 国内轻量云主机跑 cron：最稳但需付费，仅在前两者都不可行时考虑。
+
+### 0006. 航班抓取执行端：Mac Mini launchd 取代 Worker Cron
+- 日期: 2026-07-09
+- 状态: accepted
+- 背景:
+  - Browser Run 日配额约 600s，多航线监控下不够用；CF 数据中心 IP 抓东航不稳定。
+  - Mac Mini 常开，0003 已验证本机 Playwright 可抓东航；`scrape_ceair_remote.mjs` 可写远端 D1。
+- 决策:
+  - **生产抓取**：Mac Mini `launchd`（09:00 / 15:00）+ `npm run scrape:remote -- --all`。
+  - **`trip-flight-scraper` Worker**：`wrangler.toml` 设 `crons = []` 并 deploy，**代码不删**；保留 `/health`、`/limits`、Phase 1/2 作备用。
+  - Pages + D1 + 航班 API **不变**。
+- 影响:
+  - 不再消耗 Browser Run 日配额做定时抓。
+  - 依赖 Mac Mini 常开、未睡眠；需 `wrangler login` 有效。
+- 备选方案:
+  - 恢复 Worker Cron（改回 crons 并 deploy）。
+  - GitHub Actions + Playwright（0004 备胎，Mac Mini 不可用时）。
 
 ### 0005. 前端环境标识与功能开关（NEXT_PUBLIC_* 区分 dev / production 能力）
 - 日期: 2026-07-08

@@ -1,0 +1,21 @@
+{
+  "name": "trip-flight-scraper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "dev:remote": "wrangler dev --remote --port 8787",
+    "dev:scheduled": "wrangler dev --remote --test-scheduled --port 8790",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.0.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260706.1",
+    "typescript": "^5",
+    "wrangler": "^4.92.0"
+  }
+}
