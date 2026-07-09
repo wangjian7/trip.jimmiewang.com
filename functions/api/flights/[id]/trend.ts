@@ -1,4 +1,4 @@
-import { rowToWatch, type FlightWatchRow } from "../../../lib/flights";
+import type { FlightWatchRow } from "../../../lib/flights";
 import { json, type PagesFunction } from "../../../lib/http";
 
 type TrendRow = {
@@ -8,6 +8,24 @@ type TrendRow = {
   scraped_at: string;
   flight_numbers: string;
 };
+
+function buildPoints(rows: TrendRow[]) {
+  let previous: number | null = null;
+  return rows.map((entry) => {
+    const price = entry.price_economy_cny;
+    const deltaCny = price != null && previous != null ? price - previous : null;
+    if (price != null) previous = price;
+
+    return {
+      scrapeDate: entry.scrape_date,
+      slot: entry.slot,
+      scrapedAt: entry.scraped_at,
+      priceEconomyCny: price,
+      flightNumbers: entry.flight_numbers,
+      deltaCny,
+    };
+  });
+}
 
 export const onRequestGet: PagesFunction = async ({ env, params }) => {
   const id = String(params.id ?? "");
@@ -21,71 +39,37 @@ export const onRequestGet: PagesFunction = async ({ env, params }) => {
 
     if (!row) return json({ error: "not_found" }, { status: 404 });
 
-    const watch = rowToWatch(row);
-    let rows: TrendRow[] = [];
+    const result = await env.DB.prepare(
+      `SELECT r.scrape_date, r.slot, q.price_economy_cny, q.scraped_at, q.flight_numbers
+       FROM flight_quotes q
+       JOIN flight_scrape_runs r ON r.id = q.run_id
+       WHERE q.watch_id = ?1
+         AND r.status = 'success'
+         AND q.price_economy_cny IS NOT NULL
+         AND (?2 = 0 OR q.is_direct = 1)
+       ORDER BY q.flight_numbers ASC, q.scraped_at ASC`,
+    )
+      .bind(id, row.direct_only)
+      .all<TrendRow>();
 
-    if (row.pinned_flight_numbers) {
-      const result = await env.DB.prepare(
-        `SELECT r.scrape_date, r.slot, q.price_economy_cny, q.scraped_at, q.flight_numbers
-         FROM flight_quotes q
-         JOIN flight_scrape_runs r ON r.id = q.run_id
-         WHERE q.watch_id = ?1
-           AND q.flight_numbers = ?2
-           AND r.status = 'success'
-         ORDER BY q.scraped_at ASC`,
-      )
-        .bind(id, row.pinned_flight_numbers)
-        .all<TrendRow>();
-      rows = result.results ?? [];
-    } else {
-      const result = await env.DB.prepare(
-        `SELECT r.scrape_date, r.slot,
-                MIN(q.price_economy_cny) AS price_economy_cny,
-                MAX(q.scraped_at) AS scraped_at,
-                MIN(q.flight_numbers) AS flight_numbers
-         FROM flight_scrape_runs r
-         JOIN flight_quotes q ON q.run_id = r.id
-         WHERE r.watch_id = ?1
-           AND r.status = 'success'
-           AND q.price_economy_cny IS NOT NULL
-           AND (?2 = 0 OR q.is_direct = 1)
-         GROUP BY r.id
-         ORDER BY scraped_at ASC`,
-      )
-        .bind(id, row.direct_only)
-        .all<TrendRow>();
-      rows = result.results ?? [];
+    const grouped = new Map<string, TrendRow[]>();
+    for (const entry of result.results ?? []) {
+      const bucket = grouped.get(entry.flight_numbers) ?? [];
+      bucket.push(entry);
+      grouped.set(entry.flight_numbers, bucket);
     }
 
-    let previous: number | null = null;
-    const points = rows.map((entry) => {
-      const price = entry.price_economy_cny;
-      const deltaCny =
-        price != null && previous != null ? price - previous : null;
-      if (price != null) previous = price;
-
-      return {
-        scrapeDate: entry.scrape_date,
-        slot: entry.slot,
-        scrapedAt: entry.scraped_at,
-        priceEconomyCny: price,
-        flightNumbers: entry.flight_numbers,
-        deltaCny,
-      };
-    });
-
-    const label = row.pinned_flight_numbers
-      ? row.pinned_flight_numbers
-      : row.direct_only
-        ? "直飞最低价"
-        : "航线最低价";
+    const flights = [...grouped.entries()]
+      .map(([flightNumbers, rows]) => ({
+        flightNumbers,
+        points: buildPoints(rows),
+      }))
+      .sort((a, b) => a.flightNumbers.localeCompare(b.flightNumbers));
 
     return json(
       {
-        flightNumbers: row.pinned_flight_numbers,
-        label,
         travelDate: row.travel_date,
-        points,
+        flights,
       },
       { status: 200 },
     );

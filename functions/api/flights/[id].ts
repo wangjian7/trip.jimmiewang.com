@@ -1,4 +1,4 @@
-import { rowToWatch, type FlightWatchRow } from "../../lib/flights";
+import { rowToQuote, rowToWatch, type FlightQuoteRow, type FlightWatchRow } from "../../lib/flights";
 import { json, type PagesFunction } from "../../lib/http";
 
 type LatestRunRow = {
@@ -54,6 +54,21 @@ export const onRequestGet: PagesFunction = async ({ env, params }) => {
           }>()
       : null;
 
+    let latestQuotes: ReturnType<typeof rowToQuote>[] = [];
+    if (latestRun?.status === "success") {
+      const quotesResult = await env.DB.prepare(
+        `SELECT flight_fingerprint, flight_numbers, airline_name, is_direct,
+                depart_at, arrive_at, duration_minutes, aircraft,
+                price_economy_cny, price_premium_cny, price_business_cny, scraped_at
+         FROM flight_quotes
+         WHERE run_id = ?1
+         ORDER BY price_economy_cny ASC, depart_at ASC`,
+      )
+        .bind(latestRun.id)
+        .all<FlightQuoteRow>();
+      latestQuotes = (quotesResult.results ?? []).map(rowToQuote);
+    }
+
     return json(
       {
         watch: rowToWatch(row),
@@ -79,6 +94,7 @@ export const onRequestGet: PagesFunction = async ({ env, params }) => {
               arriveAt: pinnedQuote.arrive_at,
             }
           : null,
+        latestQuotes,
       },
       { status: 200 },
     );

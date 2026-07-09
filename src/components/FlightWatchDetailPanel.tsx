@@ -6,14 +6,13 @@ import { useEffect, useState } from "react";
 import { getCityDisplay } from "@/lib/airport-cities";
 import {
   deleteFlightWatch,
-  formatCny,
-  formatObservedAt,
   formatTravelDate,
   getFlightWatch,
   scrapeFlightWatch,
   type FlightWatchDetail,
 } from "@/lib/flight-watches";
-import { FlightPriceTrend } from "@/components/FlightPriceTrend";
+import { FlightWatchFlightGroups } from "@/components/FlightWatchFlightGroups";
+import { FlightPriceOverview } from "@/components/FlightPriceOverview";
 import { scrapeEnabled } from "@/lib/env";
 
 export function FlightWatchDetailPanel() {
@@ -117,7 +116,7 @@ export function FlightWatchDetailPanel() {
     );
   }
 
-  const { watch, latestRun, pinnedQuote } = detail;
+  const { watch, latestRun, pinnedQuote, latestQuotes = [] } = detail;
 
   return (
     <div className="flex flex-col gap-8">
@@ -138,43 +137,14 @@ export function FlightWatchDetailPanel() {
       </header>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="vv-card rounded-[24px] border vv-border p-6 lg:col-span-2">
-          <h2 className="text-lg font-semibold">价格概览</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <p className="vv-muted text-xs">直飞最低价（最近一次抓取）</p>
-              <p className="mt-1 text-3xl font-semibold">
-                {formatCny(latestRun?.minPriceCny)}
-              </p>
-            </div>
-            <div>
-              <p className="vv-muted text-xs">
-                {watch.pinnedFlightNumbers
-                  ? `主看 ${watch.pinnedFlightNumbers}`
-                  : "主关注航班"}
-              </p>
-              <p className="mt-1 text-3xl font-semibold">
-                {formatCny(pinnedQuote?.priceEconomyCny)}
-              </p>
-            </div>
-          </div>
-          <p className="vv-muted mt-4 text-sm">
-            {latestRun?.observedAt
-              ? `上次观测 ${formatObservedAt(latestRun.observedAt)}（${latestRun.slot === "am" ? "上午" : "下午"}）`
-              : "尚未有抓取记录。Cron Worker 接入后会每天自动更新。"}
-          </p>
-          {latestRun?.status === "failed" ? (
-            <p className="mt-2 text-sm text-[color:var(--vv-error)]">
-              最近抓取失败：{latestRun.errorMessage ?? "未知错误"}
-            </p>
-          ) : null}
-          {scrapeMessage ? (
-            <p className="vv-muted mt-2 text-sm">{scrapeMessage}</p>
-          ) : null}
-          {scrapeError ? (
-            <p className="mt-2 text-sm text-[color:var(--vv-error)]">{scrapeError}</p>
-          ) : null}
-        </div>
+        <FlightPriceOverview
+          watch={watch}
+          latestRun={latestRun}
+          latestQuotes={latestQuotes}
+          pinnedQuote={pinnedQuote}
+          scrapeMessage={scrapeMessage}
+          scrapeError={scrapeError}
+        />
 
         <div className="vv-card rounded-[24px] border vv-border p-6">
           <h2 className="text-lg font-semibold">配置</h2>
@@ -215,12 +185,15 @@ export function FlightWatchDetailPanel() {
         </div>
       </section>
 
-      <section className="vv-card rounded-[24px] border vv-border p-6">
-        <h2 className="text-lg font-semibold">价格曲线</h2>
-        {watchId ? (
-          <FlightPriceTrend watchId={watchId} refreshKey={trendRefreshKey} />
-        ) : null}
-      </section>
+      {watchId ? (
+        <FlightWatchFlightGroups
+          watchId={watchId}
+          travelDate={watch.travelDate}
+          latestQuotes={latestQuotes}
+          pinnedFlightNumbers={watch.pinnedFlightNumbers}
+          refreshKey={trendRefreshKey}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         {scrapeEnabled ? (
@@ -234,7 +207,7 @@ export function FlightWatchDetailPanel() {
           </button>
         ) : (
           <p className="vv-muted text-sm">
-            线上暂不支持手动试抓；Cron Worker 接入后将每天自动更新价格。
+            线上暂不支持手动试抓；Mac Mini 每天 09:00 / 15:00 自动更新，或在 Mac Mini 管理面板立即跑一次。
           </p>
         )}
         <button

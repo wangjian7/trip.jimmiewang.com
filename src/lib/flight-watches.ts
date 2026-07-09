@@ -45,6 +45,22 @@ export type FlightWatchDetail = {
     departAt: string;
     arriveAt: string;
   } | null;
+  latestQuotes: FlightQuoteSummary[];
+};
+
+export type FlightQuoteSummary = {
+  flightFingerprint: string;
+  flightNumbers: string;
+  airlineName: string | null;
+  isDirect: boolean;
+  departAt: string;
+  arriveAt: string;
+  durationMinutes: number | null;
+  aircraft: string | null;
+  priceEconomyCny: number | null;
+  pricePremiumCny: number | null;
+  priceBusinessCny: number | null;
+  scrapedAt: string;
 };
 
 export type CreateFlightWatchInput = {
@@ -220,9 +236,12 @@ export async function deleteFlightWatch(id: string) {
 }
 
 export type FlightWatchTrend = {
-  flightNumbers: string | null;
-  label: string;
   travelDate: string;
+  flights: FlightFlightTrend[];
+};
+
+export type FlightFlightTrend = {
+  flightNumbers: string;
   points: FlightTrendPoint[];
 };
 
@@ -309,4 +328,13 @@ export function formatTravelDate(date: string) {
     month: "long",
     day: "numeric",
   });
+}
+
+export function formatDurationMinutes(minutes: number | null | undefined) {
+  if (minutes == null) return "—";
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours === 0) return `${mins} 分钟`;
+  if (mins === 0) return `${hours} 小时`;
+  return `${hours} 小时 ${mins} 分`;
 }

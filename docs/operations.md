@@ -14,7 +14,7 @@
 |------|------|
 | [一、本地开发](#一本地开发) | 依赖安装、本地 D1、Next.js / Pages Functions / 航班看板 / Worker dev / **Mac Mini 抓取** |
 | [二、生产部署](#二生产部署) | Pages、D1 迁移、Worker deploy、环境变量、首次接入 |
-| [三、运维](#三运维) | Browser Run 配额检查、手工触发 Worker、Cron 观察、日志、Dashboard、常见故障 |
+| [三、运维](#三运维) | **生产日常操作速查**、Browser Run 配额、日志、常见故障 |
 
 ## 维护模板
 
@@ -256,8 +256,8 @@ trip.jimmiewang.com /api/flights（不变）
 **1. 一次性部署（Mac Mini 上）**
 
 ```bash
-# 代码目录（按你实际路径改）
-cd ~/nextcloud/jimmiewang/trip.jimmiewang.com
+# 代码目录（Mac Mini 生产示例：~/trip.jimmiewang.com）
+cd ~/trip.jimmiewang.com
 
 npm install
 npm run scrape:install          # Playwright Chromium
@@ -486,6 +486,134 @@ curl https://trip-flight-scraper.wangjian7.workers.dev/health
 
 ## 三、运维
 
+### 3.0 生产环境日常操作（速查）
+
+生产环境分两块：**网站管「关注什么」**，**Mac Mini 管「什么时候抓、launchd 开不开」**。数据都在同一份远端 D1，两边无需重复配置。
+
+| 要做的事 | 在哪操作 | 说明 |
+|----------|----------|------|
+| 新增 / 删除航班关注 | **trip.jimmiewang.com** | 写远端 D1 `flight_watches` |
+| 看价格、抓取历史、定时执行结果 | **trip.jimmiewang.com** | `/flights/`、`/flights/schedule/` |
+| 手动补抓、暂停/恢复 launchd、看 launchd 日志 | **Mac Mini** | 本地管理面板或 CLI |
+| 改抓取脚本 | Mac Mini `git pull` | 一般 **不用** 重装 launchd |
+
+---
+
+#### A. Mac Mini：手动抓取与 launchd 管理
+
+- 场景：不等 09:00 / 15:00 定时、临时暂停抓取、确认 launchd 是否在跑
+- 前置条件：已完成 [§1.7](#17-mac-mini-定时抓取写远端-d1可替代-worker--browser-run) 一次性部署；Mac 系统时区为 **亚洲/上海**；代码目录示例 **`~/trip.jimmiewang.com`**
+
+**执行步骤**
+
+1. SSH 登录 Mac Mini（或直接在 Mac Mini 本机操作）。
+2. 进入仓库并拉最新代码（有脚本变更时）：
+   ```bash
+   cd ~/trip.jimmiewang.com
+   git pull
+   ```
+3. **启动 launchd 管理面板**（保持终端不关）：
+   ```bash
+   npm run macmini:schedule:dashboard
+   ```
+4. 打开浏览器：
+   - 本机：`http://127.0.0.1:8791/`
+   - 远程 SSH 端口转发：
+     ```bash
+     ssh -L 8791:127.0.0.1:8791 wangjian@<mac-mini-host>
+     # 本机浏览器同样打开 http://127.0.0.1:8791/
+     ```
+
+**面板常用操作**
+
+| 按钮 / 功能 | 作用 |
+|-------------|------|
+| 查看状态 | launchd 是否加载、是否启用、下次 09:00 / 15:00 |
+| **立即跑一次** | 执行 `run-scrape.sh` → `npm run scrape:remote -- --all`（抓全部 **enabled=1** 的关注） |
+| **暂停定时** | `launchctl disable`，plist 保留，可随时恢复 |
+| **恢复定时** | `launchctl enable`（未加载时自动 bootstrap） |
+| 最近日志 | `~/Library/Logs/trip-flight-scrape/scrape-*.log` 尾部 |
+
+**CLI 等价命令**（不启面板时）
+
+```bash
+cd ~/trip.jimmiewang.com
+npm run macmini:schedule              # 查看状态
+npm run macmini:schedule:pause        # 暂停定时
+npm run macmini:schedule:resume       # 恢复定时
+npm run macmini:schedule:run          # 立即跑一次（全部 enabled 关注）
+npm run macmini:schedule:logs         # 最近日志
+```
+
+只抓 **单条** 关注（不等 `--all`）：
+
+```bash
+cd ~/trip.jimmiewang.com
+env -u http_proxy -u https_proxy npm run scrape:remote -- --watch-id=<watch-id>
+```
+
+**验证方式**
+
+- 网站 [定时任务页](https://trip.jimmiewang.com/flights/schedule/)：对应关注上午/下午场应出现新 run
+- 或 API：`curl https://trip.jimmiewang.com/api/flights/<watch-id>/`
+- Mac Mini 日志：`~/Library/Logs/trip-flight-scrape/scrape-*.log` 末尾应有 `done -> ...`
+
+**与网站「定时任务」页的区别**
+
+- **`/flights/schedule/`**（网站）：读 **D1** 里每条关注的抓取结果与计划状态，任意设备可访问
+- **`:8791` 管理面板**（Mac Mini 本机）：管 **launchd 本身**（暂停/恢复/立即跑），仅本机或 SSH 转发可访问
+
+**踩坑**
+
+- 面板「立即跑一次」需数分钟，期间不要连点；以日志为准
+- `run-scrape.sh` 会从脚本位置自动推断仓库路径；若 launchd 装于旧路径，可重跑 `install-launchd.sh` 或设 `TRIP_REPO`
+- Mac Mini 须常开、勿深度睡眠，否则错过定时
+
+---
+
+#### B. trip.jimmiewang.com：增加新的航班关注
+
+- 场景：新航线要纳入每天自动抓价
+- 前置条件：生产 Pages 与远端 D1 已就绪（[§2.2](#22-部署-cloudflare-pages前端--functions)、[§2.3](#23-d1-表结构部署到远端)）
+
+**执行步骤**
+
+1. 打开 [Flight Tracking Board](https://trip.jimmiewang.com/flights/)。
+2. 点击 **「添加关注」** → [添加页](https://trip.jimmiewang.com/flights/new/)。
+3. 填写表单：
+   - **必填**：出发城市、到达城市、出发日期（城市名会转成东航代码，如 上海 → SHA）
+   - **可选**：标签、主看航班号（如 `MU715`）、仅直飞
+4. 提交 → 自动跳转该关注的 **详情页**（URL 含 `watch-id`，如 `fw-sha-bne-20260930`）。
+
+**新增之后会发生什么**
+
+- 关注写入远端 D1，默认 **enabled=1**
+- **Mac Mini 无需改配置**：launchd 定时任务跑 `scrape:remote -- --all` 时会自动包含新关注
+- 首次价格：
+  - **等定时**：下一个北京时间 **09:00** 或 **15:00**
+  - **不等**：到 Mac Mini 管理面板点 **「立即跑一次」**，或 CLI：
+    ```bash
+    npm run scrape:remote -- --watch-id=<新 watch-id>
+    ```
+
+**查看与维护**
+
+| 页面 | 地址 | 用途 |
+|------|------|------|
+| 关注列表 | `/flights/` | 所有关注、最近最低价 |
+| 关注详情 | `/flights/detail/?id=<watch-id>` | 价格趋势、删除关注 |
+| 定时任务 | `/flights/schedule/` | 各关注上午/下午场执行状态 |
+
+**删除关注**：详情页 → **删除**（`flight_watches` 及关联价格历史一并删除；Mac Mini 下次 `--all` 不再抓该条）。
+
+**踩坑**
+
+- 生产环境 **没有**「试抓一次」按钮（`NEXT_PUBLIC_SCRAPE_ENABLED=false`）；补抓请用 Mac Mini
+- 同航线同日期重复添加会提示「已存在」
+- 网站只能看 D1 抓取结果，**不能**从网站暂停 Mac Mini 的 launchd → 须用 [§3.0 A](#a-mac-mini手动抓取与-launchd-管理)
+
+---
+
 ### 3.1 Worker 触发机制（Cron / 手工 / wrangler）
 
 **生产 URL**：`https://trip-flight-scraper.wangjian7.workers.dev`
@@ -635,6 +763,7 @@ npx wrangler d1 execute trip-jimmiewang-com --remote --command \
 ### 3.7 当前进度（2026-07-09）
 
 - Pages + 远端 D1 + 航班 API：已上线
-- **生产航班抓取**：**Mac Mini launchd** + `npm run scrape:remote`（§1.7）
+- **生产航班抓取**：**Mac Mini launchd** + `npm run scrape:remote`（§1.7）；日常操作见 [§3.0](#30-生产环境日常操作速查)
+- 网站 `/flights/schedule/`：查看 D1 抓取计划与结果；launchd 暂停/恢复见 Mac Mini `:8791` 面板
 - `trip-flight-scraper` Worker：**Cron 已停用**，代码保留（`/health`、`/limits`、Phase 1/2 备用）
 - 本地「试抓一次」：`npm run dev:api` 8789（写本地 D1）

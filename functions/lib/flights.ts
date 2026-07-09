@@ -61,3 +61,35 @@ export function rowToWatch(row: FlightWatchRow) {
     updatedAt: row.updated_at,
   };
 }
+
+export type FlightQuoteRow = {
+  flight_fingerprint: string;
+  flight_numbers: string;
+  airline_name: string | null;
+  is_direct: number;
+  depart_at: string;
+  arrive_at: string;
+  duration_minutes: number | null;
+  aircraft: string | null;
+  price_economy_cny: number | null;
+  price_premium_cny: number | null;
+  price_business_cny: number | null;
+  scraped_at: string;
+};
+
+export function rowToQuote(row: FlightQuoteRow) {
+  return {
+    flightFingerprint: row.flight_fingerprint,
+    flightNumbers: row.flight_numbers,
+    airlineName: row.airline_name,
+    isDirect: row.is_direct === 1,
+    departAt: row.depart_at,
+    arriveAt: row.arrive_at,
+    durationMinutes: row.duration_minutes,
+    aircraft: row.aircraft,
+    priceEconomyCny: row.price_economy_cny,
+    pricePremiumCny: row.price_premium_cny,
+    priceBusinessCny: row.price_business_cny,
+    scrapedAt: row.scraped_at,
+  };
+}

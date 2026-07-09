@@ -1,18 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   formatCny,
   formatObservedAt,
-  getFlightWatchTrend,
   type FlightTrendPoint,
-  type FlightWatchTrend,
 } from "@/lib/flight-watches";
-
-type FlightPriceTrendProps = {
-  watchId: string;
-  refreshKey?: number;
-};
 
 function formatDelta(delta: number | null | undefined) {
   if (delta == null) return "—";
@@ -69,7 +62,7 @@ function PriceTrendChart({ points }: { points: FlightTrendPoint[] }) {
     <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-auto w-full min-w-[320px]"
+        className="h-auto w-full min-w-[280px]"
         role="img"
         aria-label="价格曲线"
       >
@@ -125,68 +118,40 @@ function PriceTrendChart({ points }: { points: FlightTrendPoint[] }) {
   );
 }
 
-export function FlightPriceTrend({ watchId, refreshKey }: FlightPriceTrendProps) {
-  const [trend, setTrend] = useState<FlightWatchTrend | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type FlightPriceTrendSectionProps = {
+  flightNumbers: string;
+  travelDate: string;
+  points: FlightTrendPoint[];
+  compact?: boolean;
+};
 
-  useEffect(() => {
-    let cancelled = false;
+export function FlightPriceTrendSection({
+  flightNumbers,
+  travelDate,
+  points,
+  compact = false,
+}: FlightPriceTrendSectionProps) {
+  const dailyRows = useMemo(() => pivotDaily(points), [points]);
 
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getFlightWatchTrend(watchId);
-        if (!cancelled) setTrend(data);
-      } catch (err) {
-        if (!cancelled) {
-          setTrend(null);
-          setError(err instanceof Error ? err.message : "加载价格曲线失败");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [watchId, refreshKey]);
-
-  const dailyRows = useMemo(
-    () => (trend?.points ? pivotDaily(trend.points) : []),
-    [trend?.points],
-  );
-
-  if (loading) {
-    return <p className="vv-muted mt-4 text-sm">加载价格曲线…</p>;
-  }
-
-  if (error) {
-    return <p className="mt-4 text-sm text-[color:var(--vv-error)]">{error}</p>;
-  }
-
-  if (!trend || trend.points.length === 0) {
+  if (points.length === 0) {
     return (
-      <p className="vv-muted mt-4 text-sm">
-        还没有观测数据。点「试抓一次」或等定时抓取后，这里会按观测时间展示价格变化。
+      <p className="vv-muted text-sm">
+        还没有 {flightNumbers} 的观测数据；再多抓几次后会显示价格曲线。
       </p>
     );
   }
 
   return (
-    <div className="mt-4 flex flex-col gap-6">
+    <div className={`flex flex-col ${compact ? "gap-4" : "gap-6"}`}>
       <p className="vv-muted text-sm">
-        出发日 {trend.travelDate} 固定 · 曲线展示{" "}
-        <span className="font-medium text-[color:var(--foreground)]">{trend.label}</span>{" "}
+        出发日 {travelDate} ·{" "}
+        <span className="font-medium text-[color:var(--foreground)]">{flightNumbers}</span>{" "}
         经济舱价格（按观测时间）
       </p>
 
-      <PriceTrendChart points={trend.points} />
+      <PriceTrendChart points={points} />
 
-      {trend.points.length === 1 ? (
+      {points.length === 1 ? (
         <p className="vv-muted text-xs">目前只有 1 个观测点；再多抓几次后会连成完整曲线。</p>
       ) : null}
 
@@ -200,8 +165,11 @@ export function FlightPriceTrend({ watchId, refreshKey }: FlightPriceTrendProps)
             </tr>
           </thead>
           <tbody>
-            {trend.points.map((point) => (
-              <tr key={`${point.scrapeDate}-${point.slot}-${point.scrapedAt}`} className="border-b vv-border">
+            {points.map((point) => (
+              <tr
+                key={`${point.scrapeDate}-${point.slot}-${point.scrapedAt}`}
+                className="border-b vv-border"
+              >
                 <td className="px-3 py-2">
                   {point.scrapeDate.slice(5).replace("-", "/")}{" "}
                   {point.slot === "am" ? "上午" : "下午"}
