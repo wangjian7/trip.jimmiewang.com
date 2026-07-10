@@ -1,9 +1,12 @@
 import type { FlightWatchRow, ParsedFlight, ScrapeResult } from "./types";
+import ceairMetroAirports from "../../../shared/ceair-metro-airports.json";
 
-const CEAIR_ORIGIN_AIRPORTS: Record<string, string[]> = {
-  SHA: ["SHA", "PVG"],
-  BJS: ["PEK", "PKX"],
-};
+function ceairAirportSegment(code: string) {
+  const normalized = code.trim().toUpperCase();
+  const airports =
+    (ceairMetroAirports as Record<string, string[]>)[normalized] ?? [normalized];
+  return airports.join(",");
+}
 
 export const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -27,9 +30,7 @@ export function buildCeairShoppingUrl(
   destCode: string,
   travelDate: string,
 ) {
-  const originSegment = (CEAIR_ORIGIN_AIRPORTS[originCode] ?? [originCode]).join(",");
-  const destSegment = (CEAIR_ORIGIN_AIRPORTS[destCode] ?? [destCode]).join(",");
-  return `https://www.ceair.com/zh/cny/shopping/oneway/${originSegment}-${destSegment}/${travelDate}`;
+  return `https://www.ceair.com/zh/cny/shopping/oneway/${ceairAirportSegment(originCode)}-${ceairAirportSegment(destCode)}/${travelDate}`;
 }
 
 export function resolveWatchUrl(watch: FlightWatchRow) {

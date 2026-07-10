@@ -1,14 +1,9 @@
 import { chromium } from "playwright";
 
-const CEAIR_ORIGIN_AIRPORTS = {
-  SHA: ["SHA", "PVG"],
-  BJS: ["PEK", "PKX"],
-};
+import { ceairAirportSegment } from "./ceair-airports.mjs";
 
 export function buildCeairShoppingUrl(originCode, destCode, travelDate) {
-  const originSegment = (CEAIR_ORIGIN_AIRPORTS[originCode] ?? [originCode]).join(",");
-  const destSegment = (CEAIR_ORIGIN_AIRPORTS[destCode] ?? [destCode]).join(",");
-  return `https://www.ceair.com/zh/cny/shopping/oneway/${originSegment}-${destSegment}/${travelDate}`;
+  return `https://www.ceair.com/zh/cny/shopping/oneway/${ceairAirportSegment(originCode)}-${ceairAirportSegment(destCode)}/${travelDate}`;
 }
 
 function parsePriceCny(raw) {

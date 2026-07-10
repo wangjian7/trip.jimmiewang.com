@@ -1,0 +1,11 @@
+{
+  "SHA": ["SHA", "PVG"],
+  "BJS": ["PEK", "PKX"],
+  "HKG": ["HKG"],
+  "MFM": ["MFM"],
+  "TYO": ["NRT", "HND"],
+  "OSA": ["KIX"],
+  "NYC": ["JFK", "EWR"],
+  "LON": ["LHR", "LGW"],
+  "PAR": ["CDG", "ORY"]
+}

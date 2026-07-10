@@ -24,6 +24,7 @@ const toolbarGhostClass =
   "vv-toolbar-btn vv-toolbar-btn-ghost inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
 const toolbarPrimaryClass =
   "vv-toolbar-btn vv-toolbar-btn-primary inline-flex items-center justify-center gap-2.5 rounded-xl px-5 text-sm font-medium shadow-sm disabled:cursor-not-allowed disabled:opacity-50";
+const toolbarGroupClass = "vv-toolbar-group";
 
 function storageKey(slug: string) {
   return `trip-plan:${slug}`;
@@ -867,7 +868,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
             />
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Link href="/" className={toolbarGhostClass}>
               <ToolbarIcon>
                 <path
@@ -895,203 +896,24 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
               返回首页
             </Link>
 
-            <div
-              className={[
-                "vv-toolbar-badge inline-flex items-center justify-center rounded-xl px-5 text-sm font-medium",
-                readOnly
-                  ? "vv-badge-readonly"
-                  : "vv-badge-editable",
-              ].join(" ")}
-            >
-              <span
-                aria-hidden="true"
+            <div className={toolbarGroupClass} role="group" aria-label="编辑与云端">
+              <div
                 className={[
-                  "h-2.5 w-2.5 rounded-full",
-                  readOnly ? "bg-current/55" : "bg-current",
+                  "vv-toolbar-badge inline-flex items-center justify-center rounded-xl px-5 text-sm font-medium",
+                  readOnly ? "vv-badge-readonly" : "vv-badge-editable",
                 ].join(" ")}
-              />
-              {readOnly ? "只读" : "可编辑"}
-            </div>
-
-            <button
-              className={toolbarGhostClass}
-              onClick={pullFromCloud}
-              type="button"
-              disabled={cloudBusy}
-            >
-              <ToolbarIcon>
-                <path
-                  d="M10 3v8"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="m6.8 8.2 3.2 3.3 3.2-3.3"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M4 14.5h12"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </ToolbarIcon>
-              从云端恢复
-            </button>
-            <button
-              className={toolbarPrimaryClass}
-              onClick={saveToCloud}
-              type="button"
-              disabled={cloudBusy}
-            >
-              <ToolbarIcon>
-                <path
-                  d="M5 4.5h8.5L16 7v8.2A1.8 1.8 0 0 1 14.2 17H5.8A1.8 1.8 0 0 1 4 15.2V6.3A1.8 1.8 0 0 1 5.8 4.5Z"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M7 4.5v3h5v-3M7.4 13h5.2"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </ToolbarIcon>
-              保存到云端
-            </button>
-
-            <button
-              className={toolbarGhostClass}
-              onClick={() => setOverviewOpen(true)}
-              type="button"
-            >
-              <ToolbarIcon>
-                <rect
-                  x="4"
-                  y="4"
-                  width="12"
-                  height="12"
-                  rx="2.5"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                />
-                <path
-                  d="M7 8h6M7 11h6M7 14h3.5"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                />
-              </ToolbarIcon>
-              一页展示
-            </button>
-
-            {hasReferenceDoc(plan.slug) ? (
-              <Link
-                href={`/trips/${plan.slug}/reference/`}
-                className={toolbarGhostClass}
               >
-                <ToolbarIcon>
-                  <path
-                    d="M6 4.5h8.5L14 6.5v9.2A1.8 1.8 0 0 1 12.2 17.5H6.8A1.8 1.8 0 0 1 5 15.7V6.3A1.8 1.8 0 0 1 6.8 4.5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M8 4.5v2.5h4V4.5M8.5 11.5h3M8.5 14h3"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </ToolbarIcon>
-                完整计划
-              </Link>
-            ) : null}
-            {!readOnly ? (
-                <>
-                  <button
-                    className={toolbarGhostClass}
-                    onClick={() =>
-                      downloadJson(`${plan.slug}.json`, {
-                        exportedAt: new Date().toISOString(),
-                        plan,
-                      })
-                    }
-                    type="button"
-                  >
-                    <ToolbarIcon>
-                      <path
-                        d="M10 3v8"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="m6.8 8.2 3.2 3.3 3.2-3.3"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M5 15.5h10"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </ToolbarIcon>
-                    导出备份
-                  </button>
-                  <button
-                    className={toolbarGhostClass}
-                    onClick={triggerImport}
-                    type="button"
-                  >
-                    <ToolbarIcon>
-                      <path
-                        d="M10 16V8"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                      <path
-                        d="m13.2 10.8-3.2-3.3-3.2 3.3"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M5 4.5h10"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                      />
-                    </ToolbarIcon>
-                    导入备份
-                  </button>
-                  <input
-                    ref={fileInputRef}
-                    className="hidden"
-                    type="file"
-                    accept="application/json"
-                    aria-label="导入备份文件"
-                    title="导入备份文件"
-                    onChange={(e) =>
-                      handleImportFile(e.target.files?.[0] ?? null)
-                    }
-                  />
-                </>
-            ) : null}
+                <span
+                  aria-hidden="true"
+                  className={[
+                    "h-2.5 w-2.5 rounded-full",
+                    readOnly ? "bg-current/55" : "bg-current",
+                  ].join(" ")}
+                />
+                {readOnly ? "只读" : "可编辑"}
+              </div>
 
-            {!plan.writeKeyHash ? (
+              {!plan.writeKeyHash ? (
                 <button
                   className={toolbarGhostClass}
                   onClick={() => openWriteKeyModal("set")}
@@ -1115,7 +937,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   </ToolbarIcon>
                   设置编辑口令
                 </button>
-            ) : readOnly ? (
+              ) : readOnly ? (
                 <button
                   className={toolbarPrimaryClass}
                   onClick={() => openWriteKeyModal("unlock")}
@@ -1140,7 +962,7 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                   </ToolbarIcon>
                   开始编辑
                 </button>
-            ) : (
+              ) : (
                 <>
                   <button
                     className={toolbarGhostClass}
@@ -1186,7 +1008,184 @@ export function TripEditor({ trip }: { trip: TripPlan }) {
                     切换为只读
                   </button>
                 </>
-            )}
+              )}
+
+              <button
+                className={toolbarGhostClass}
+                onClick={pullFromCloud}
+                type="button"
+                disabled={cloudBusy}
+              >
+                <ToolbarIcon>
+                  <path
+                    d="M10 3v8"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="m6.8 8.2 3.2 3.3 3.2-3.3"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M4 14.5h12"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </ToolbarIcon>
+                从云端恢复
+              </button>
+              <button
+                className={toolbarPrimaryClass}
+                onClick={saveToCloud}
+                type="button"
+                disabled={cloudBusy}
+              >
+                <ToolbarIcon>
+                  <path
+                    d="M5 4.5h8.5L16 7v8.2A1.8 1.8 0 0 1 14.2 17H5.8A1.8 1.8 0 0 1 4 15.2V6.3A1.8 1.8 0 0 1 5.8 4.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M7 4.5v3h5v-3M7.4 13h5.2"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </ToolbarIcon>
+                保存到云端
+              </button>
+            </div>
+
+            <div className={toolbarGroupClass} role="group" aria-label="查看">
+              <button
+                className={toolbarGhostClass}
+                onClick={() => setOverviewOpen(true)}
+                type="button"
+              >
+                <ToolbarIcon>
+                  <rect
+                    x="4"
+                    y="4"
+                    width="12"
+                    height="12"
+                    rx="2.5"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                  />
+                  <path
+                    d="M7 8h6M7 11h6M7 14h3.5"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                  />
+                </ToolbarIcon>
+                一页展示
+              </button>
+
+              {hasReferenceDoc(plan.slug) ? (
+                <Link href={`/trips/${plan.slug}/reference/`} className={toolbarGhostClass}>
+                  <ToolbarIcon>
+                    <path
+                      d="M6 4.5h8.5L14 6.5v9.2A1.8 1.8 0 0 1 12.2 17.5H6.8A1.8 1.8 0 0 1 5 15.7V6.3A1.8 1.8 0 0 1 6.8 4.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M8 4.5v2.5h4V4.5M8.5 11.5h3M8.5 14h3"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </ToolbarIcon>
+                  完整计划
+                </Link>
+              ) : null}
+            </div>
+
+            {!readOnly ? (
+              <div className={toolbarGroupClass} role="group" aria-label="本地备份">
+                <button
+                  className={toolbarGhostClass}
+                  onClick={() =>
+                    downloadJson(`${plan.slug}.json`, {
+                      exportedAt: new Date().toISOString(),
+                      plan,
+                    })
+                  }
+                  type="button"
+                >
+                  <ToolbarIcon>
+                    <path
+                      d="M10 3v8"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="m6.8 8.2 3.2 3.3 3.2-3.3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M5 15.5h10"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </ToolbarIcon>
+                  导出备份
+                </button>
+                <button
+                  className={toolbarGhostClass}
+                  onClick={triggerImport}
+                  type="button"
+                >
+                  <ToolbarIcon>
+                    <path
+                      d="M10 16V8"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                    <path
+                      d="m13.2 10.8-3.2-3.3-3.2 3.3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M5 4.5h10"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </ToolbarIcon>
+                  导入备份
+                </button>
+                <input
+                  ref={fileInputRef}
+                  className="hidden"
+                  type="file"
+                  accept="application/json"
+                  aria-label="导入备份文件"
+                  title="导入备份文件"
+                  onChange={(e) => handleImportFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+            ) : null}
           </div>
 
           {storageError ? (

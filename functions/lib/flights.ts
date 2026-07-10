@@ -1,3 +1,5 @@
+import { ceairAirportSegment } from "./ceair-airports";
+
 export type FlightWatchRow = {
   id: string;
   trip_slug: string | null;
@@ -16,19 +18,12 @@ export type FlightWatchRow = {
   updated_at: string;
 };
 
-const CEAIR_ORIGIN_AIRPORTS: Record<string, string[]> = {
-  SHA: ["SHA", "PVG"],
-  BJS: ["PEK", "PKX"],
-};
-
 export function buildCeairShoppingUrl(
   originCode: string,
   destCode: string,
   travelDate: string,
 ) {
-  const originSegment = (CEAIR_ORIGIN_AIRPORTS[originCode] ?? [originCode]).join(",");
-  const destSegment = (CEAIR_ORIGIN_AIRPORTS[destCode] ?? [destCode]).join(",");
-  return `https://www.ceair.com/zh/cny/shopping/oneway/${originSegment}-${destSegment}/${travelDate}`;
+  return `https://www.ceair.com/zh/cny/shopping/oneway/${ceairAirportSegment(originCode)}-${ceairAirportSegment(destCode)}/${travelDate}`;
 }
 
 export function buildWatchId(originCode: string, destCode: string, travelDate: string) {

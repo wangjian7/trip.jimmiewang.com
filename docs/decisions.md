@@ -90,6 +90,7 @@
   - GitHub Actions 定时跑 Playwright + `wrangler d1 execute --remote` 写入：免费、不依赖本地，作为 CF IP 被拦时的首选备胎（代码基本可复用）。
   - 本地 Mac launchd 定时：环境最接近真实用户，但依赖开机，放弃作为主方案。
   - **2026-07-09 起**：生产抓取改 **Mac Mini launchd + `scrape:remote`**；Worker Cron 停用，代码保留。
+  - **2026-07-10 起**：本地 dev 同样只用 **Playwright 脚本（`:8789` / `scrape:local`）**，不再用 Worker + Browser Run 试抓。
   - 国内轻量云主机跑 cron：最稳但需付费，仅在前两者都不可行时考虑。
 
 ### 0006. 航班抓取执行端：Mac Mini launchd 取代 Worker Cron
@@ -98,11 +99,14 @@
 - 背景:
   - Browser Run 日配额约 600s，多航线监控下不够用；CF 数据中心 IP 抓东航不稳定。
   - Mac Mini 常开，0003 已验证本机 Playwright 可抓东航；`scrape_ceair_remote.mjs` 可写远端 D1。
+  - 本地 dev 若走 Worker + Browser Run，与生产共用配额且与 Mac Mini 脚本路径不一致。
 - 决策:
   - **生产抓取**：Mac Mini `launchd`（09:00 / 15:00）+ `npm run scrape:remote -- --all`。
-  - **`trip-flight-scraper` Worker**：`wrangler.toml` 设 `crons = []` 并 deploy，**代码不删**；保留 `/health`、`/limits`、Phase 1/2 作备用。
+  - **本地抓取**：`dev:api` / `scrape:local` → 同一套 `scripts/lib/ceair-scraper.mjs` 写本地 D1；**不启动** `workers/flight-scraper`。
+  - **`trip-flight-scraper` Worker**：`wrangler.toml` 设 `crons = []` 并 deploy，**代码不删**；保留 `/health`、`/limits`、Phase 1/2 作历史备用。
   - Pages + D1 + 航班 API **不变**。
 - 影响:
+  - 本地与生产抓取统一为 Playwright 脚本；运维见 `operations.md` §1.0 / §1.7。
   - 不再消耗 Browser Run 日配额做定时抓。
   - 依赖 Mac Mini 常开、未睡眠；需 `wrangler login` 有效。
 - 备选方案:
@@ -113,7 +117,7 @@
 - 日期: 2026-07-08
 - 状态: accepted
 - 背景:
-  - 本地开发与 Cloudflare Pages 生产的能力集不同：本地有 Playwright scrape 服务（8789）与 wrangler 本地 D1；生产有 Pages Functions + 远端 D1，但尚无 scrape / Cron Worker。
+  - 本地开发与 Cloudflare Pages 生产的能力集不同：本地有 Playwright scrape 服务（8789）与 wrangler 本地 D1；生产有 Pages Functions + 远端 D1，航班抓取由 **Mac Mini** 写远端 D1（**不用 Worker**）。
   - 若不区分环境，生产详情页仍展示「试抓一次」，用户点击后返回 405，体验易误解为站点故障。
   - Next.js 采用 Static Export，客户端可读的环境变量必须在 `next build` 时通过 `NEXT_PUBLIC_*` 注入。
 - 决策:

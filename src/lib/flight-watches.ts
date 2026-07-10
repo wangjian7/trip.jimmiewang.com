@@ -282,20 +282,34 @@ export type ScrapeFlightWatchResult = {
 };
 
 export async function scrapeFlightWatch(id: string) {
-  const res = await fetch(`/api/flights/${encodeURIComponent(id)}/scrape/`, {
-    method: "POST",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`/api/flights/${encodeURIComponent(id)}/scrape/`, {
+      method: "POST",
+    });
+  } catch {
+    throw new Error(
+      "无法连接 scrape 服务。请运行 npm run dev:local（或同时开 npm run dev 与 npm run dev:api）。",
+    );
+  }
+
   if (!res.ok) {
     let message = "试抓失败。";
     try {
       const parsed = (await res.json()) as { message?: string; error?: string };
-      if (parsed.message) message = parsed.message;
-      else if (parsed.error === "scrape_failed") {
-        message = "抓取失败，请查看终端 2 的 [scrape] 日志。";
+      if (parsed.message) {
+        message = parsed.message;
+      } else if (parsed.error === "scrape_failed") {
+        message = "抓取失败，请查看终端 [scrape] 日志。";
+      } else if (parsed.error === "scrape_unreachable") {
+        message = parsed.message ?? "无法连接 scrape 服务（8789）。";
       }
     } catch {
-      if (res.status === 404 || res.status === 502 || res.status === 500) {
-        message = "无法连接 scrape 服务。请确认 npm run dev:api 正在运行，并查看终端 2 日志。";
+      if (res.status === 404 || res.status === 502 || res.status === 503) {
+        message =
+          "无法连接 scrape 服务。请运行 npm run dev:local（网站 :3000 + API :8788 + 试抓 :8789）。";
+      } else if (res.status === 500) {
+        message = "抓取失败，请查看终端 [scrape] 日志。";
       }
     }
     throw new Error(message);
