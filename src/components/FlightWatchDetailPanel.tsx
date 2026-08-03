@@ -14,6 +14,7 @@ import {
 import { FlightWatchFlightGroups } from "@/components/FlightWatchFlightGroups";
 import { FlightPriceOverview } from "@/components/FlightPriceOverview";
 import { scrapeEnabled } from "@/lib/env";
+import { isFlightWatchArchived } from "../../shared/flight-watch-archive.mjs";
 
 export function FlightWatchDetailPanel() {
   const router = useRouter();
@@ -35,11 +36,7 @@ export function FlightWatchDetailPanel() {
   }
 
   useEffect(() => {
-    if (!watchId) {
-      setLoading(false);
-      setError("缺少关注 ID。");
-      return;
-    }
+    if (!watchId) return;
 
     const id = watchId;
     let cancelled = false;
@@ -105,6 +102,17 @@ export function FlightWatchDetailPanel() {
     return <p className="vv-muted text-sm">加载中…</p>;
   }
 
+  if (!watchId) {
+    return (
+      <div className="vv-card rounded-[24px] border vv-border p-6">
+        <p className="text-sm text-[color:var(--vv-error)]">缺少关注 ID。</p>
+        <Link href="/flights/" className="vv-link mt-4 inline-block text-sm">
+          返回列表
+        </Link>
+      </div>
+    );
+  }
+
   if (error || !detail) {
     return (
       <div className="vv-card rounded-[24px] border vv-border p-6">
@@ -117,15 +125,20 @@ export function FlightWatchDetailPanel() {
   }
 
   const { watch, latestRun, pinnedQuote, latestQuotes = [] } = detail;
+  const archived = isFlightWatchArchived(watch.travelDate);
+  const listHref = archived ? "/flights/?view=archived" : "/flights/";
 
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-2">
-        <Link href="/flights/" className="vv-link text-sm">
+        <Link href={listHref} className="vv-link text-sm">
           ← 返回关注列表
         </Link>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">{watch.label}</h1>
+          {archived ? (
+            <span className="vv-badge-readonly rounded-full px-2.5 py-1 text-xs">已归档</span>
+          ) : null}
           {!watch.enabled ? (
             <span className="vv-badge-readonly rounded-full px-2.5 py-1 text-xs">已停用</span>
           ) : null}
@@ -185,6 +198,18 @@ export function FlightWatchDetailPanel() {
         </div>
       </section>
 
+      {archived ? (
+        <div className="vv-card rounded-[24px] border vv-border p-5">
+          <p className="text-sm font-medium">这条关注已归档</p>
+          <p className="vv-muted mt-2 text-sm">
+            已过出发日的航班不会再参与自动抓取，仍保留历史价格记录供回看。
+          </p>
+          <Link href="/flights/?view=archived" className="vv-link mt-3 inline-block text-sm">
+            查看已归档列表 →
+          </Link>
+        </div>
+      ) : null}
+
       {watchId ? (
         <FlightWatchFlightGroups
           watchId={watchId}
@@ -196,7 +221,7 @@ export function FlightWatchDetailPanel() {
       ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
-        {scrapeEnabled ? (
+        {scrapeEnabled && !archived ? (
           <button
             type="button"
             disabled={scraping}
@@ -205,6 +230,8 @@ export function FlightWatchDetailPanel() {
           >
             {scraping ? "抓取中…" : "试抓一次"}
           </button>
+        ) : archived ? (
+          <p className="vv-muted text-sm">已归档航班不再支持手动试抓。</p>
         ) : (
           <p className="vv-muted text-sm">
             线上暂不支持手动试抓；Mac Mini 每天 09:00 / 15:00 自动更新，或在 Mac Mini 管理面板立即跑一次。

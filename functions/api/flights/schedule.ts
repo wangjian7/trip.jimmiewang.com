@@ -1,6 +1,7 @@
 import { rowToWatch, type FlightWatchRow } from "../../lib/flights";
 import { beijingScheduleContext, type ScheduleSlotId } from "../../lib/schedule";
 import { json, type PagesFunction } from "../../lib/http";
+import { isFlightWatchArchived } from "../../../shared/flight-watch-archive.mjs";
 
 type RunRow = {
   id: string;
@@ -79,26 +80,28 @@ export const onRequestGet: PagesFunction = async ({ env }) => {
       runsByWatch.get(run.watch_id)!.set(run.slot, run);
     }
 
-    const watches = (watchesResult.results ?? []).map((row) => {
-      const watch = rowToWatch(row);
+    const watches = (watchesResult.results ?? [])
+      .filter((row) => !isFlightWatchArchived(row.travel_date))
+      .map((row) => {
+        const watch = rowToWatch(row);
       const todayRuns = runsByWatch.get(row.id) ?? new Map<string, RunRow>();
       const amRun = todayRuns.get("am");
       const pmRun = todayRuns.get("pm");
 
-      return {
-        ...watch,
-        schedule: {
-          am: {
-            state: slotState(watch.enabled, "am", amRun, ctx),
-            run: slotRunPayload(amRun),
+        return {
+          ...watch,
+          schedule: {
+            am: {
+              state: slotState(watch.enabled, "am", amRun, ctx),
+              run: slotRunPayload(amRun),
+            },
+            pm: {
+              state: slotState(watch.enabled, "pm", pmRun, ctx),
+              run: slotRunPayload(pmRun),
+            },
           },
-          pm: {
-            state: slotState(watch.enabled, "pm", pmRun, ctx),
-            run: slotRunPayload(pmRun),
-          },
-        },
-      };
-    });
+        };
+      });
 
     return json(
       {

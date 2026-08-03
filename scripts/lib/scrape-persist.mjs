@@ -1,4 +1,5 @@
 import * as localD1 from "./local-d1.mjs";
+import { isFlightWatchArchived } from "../../shared/flight-watch-archive.mjs";
 
 async function resolveDb(db) {
   if (db?.kind === "remote") {
@@ -144,12 +145,19 @@ export async function loadWatch(db, watchId) {
   const watch = await dbGet(db, "SELECT * FROM flight_watches WHERE id = ?", [watchId]);
   if (!watch) throw new Error(`找不到关注：${watchId}`);
   if (watch.enabled !== 1) throw new Error(`关注已停用：${watchId}`);
+  if (isFlightWatchArchived(watch.travel_date)) {
+    throw new Error(`关注已归档，不再抓取：${watchId}`);
+  }
   return watch;
 }
 
 export async function loadEnabledWatches(db) {
   const { dbAll } = await resolveDb(db);
-  return dbAll(db, "SELECT * FROM flight_watches WHERE enabled = 1 ORDER BY created_at ASC");
+  const watches = await dbAll(
+    db,
+    "SELECT * FROM flight_watches WHERE enabled = 1 ORDER BY created_at ASC",
+  );
+  return watches.filter((watch) => !isFlightWatchArchived(watch.travel_date));
 }
 
 export async function failScrapeRun(db, watch, url, errorMessage) {

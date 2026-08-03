@@ -84,7 +84,7 @@ async function main() {
 
   const watches = watchId ? [await loadWatch(db, watchId)] : await loadEnabledWatches(db);
   if (watches.length === 0) {
-    console.log("没有 enabled=1 的 flight_watches");
+    console.log("没有可抓取的未归档航班关注（enabled=1）。");
     return;
   }
 
