@@ -5,6 +5,7 @@
   "MFM": ["MFM"],
   "TYO": ["NRT", "HND"],
   "OSA": ["KIX"],
+  "SEL": ["ICN", "GMP"],
   "NYC": ["JFK", "EWR"],
   "LON": ["LHR", "LGW"],
   "PAR": ["CDG", "ORY"]

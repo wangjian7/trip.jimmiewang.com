@@ -107,6 +107,13 @@ export const airportCities: AirportCity[] = [
     display: "冲绳",
     names: ["冲绳", "Okinawa", "OKA", "那霸", "Naha"],
   },
+  // —— 韩国 ——
+  {
+    code: "SEL",
+    display: "首尔",
+    names: ["首尔", "Seoul", "SEL", "ICN", "GMP", "仁川", "金浦"],
+    hint: "含仁川/金浦",
+  },
   // —— 美国 ——
   {
     code: "LAX",
